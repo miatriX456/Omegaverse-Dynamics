@@ -115,97 +115,7 @@ const SCENT_CATEGORIES = {
 };
 
 // ============================================================
-// 2. ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ ФАКТОВ (ПАМЯТЬ)
-// ============================================================
-
-function addFact(text, category = 'events', importance = 'medium') {
-    if (!state.memory) state.memory = { facts: [], flashbackQueue: [], flashHistory: [] };
-    state.memory.facts.unshift({
-        id: 'fact_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-        text: text,
-        category: category,
-        importance: importance,
-        ts: Date.now(),
-        disabled: false
-    });
-    if (state.memory.facts.length > 200) state.memory.facts.length = 200;
-    save();
-}
-
-// ============================================================
-// 3. СОСТОЯНИЕ
-// ============================================================
-
-let state = {
-    enabled: true,
-    forceOmegaverse: true,
-    promptInterval: 10,
-    currentMessageCount: 0,
-    player: {
-        name: "Игрок",
-        status: 'beta',
-        fakeStatus: null,
-        role: 'none',
-        scent: { primary: null, secondary: null, nuance: null, territory: null },
-        cycle: { type: 'none', startDate: null, duration: 5, interval: 28, nextDate: null, active: false },
-        mark: { has: false, owner: null, target: null },
-        bond: { has: false, partner: null },
-        interests: { romantic: [], sexual: [] },
-        log: [],
-        trauma: null,
-        traumaDescription: '',
-    },
-    npcs: [],
-    calendar: { currentDate: null, season: 'spring', globalEvents: [] },
-    showFloating: true,
-    expandedMode: false,
-    activeTab: 'player',
-    autoDetect: {
-        enabled: true,
-        detectStatus: true,
-        detectCycle: true,
-        detectScent: true,
-        detectMark: true,
-        detectNewNpc: true
-    },
-    minContextLength: 0,
-    cooldownMessages: 0,
-    lastTriggerMessageId: null,
-    memory: { facts: [], flashbackQueue: [], flashHistory: [] }
-};
-
-// ============================================================
-// 4. ЗАГРУЗКА / СОХРАНЕНИЕ
-// ============================================================
-
-function load() {
-    try {
-        const s = localStorage.getItem('ov');
-        if (s) {
-            const saved = JSON.parse(s);
-            state = deepMerge(state, saved);
-        }
-    } catch (e) { console.error('[OV] Load error:', e); }
-}
-
-function save() {
-    localStorage.setItem('ov', JSON.stringify(state));
-}
-
-function deepMerge(target, source) {
-    for (const key in source) {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-            if (!target[key]) target[key] = {};
-            deepMerge(target[key], source[key]);
-        } else {
-            target[key] = source[key];
-        }
-    }
-    return target;
-}
-
-// ============================================================
-// 5. ФУНКЦИИ ДЛЯ РАБОТЫ С ЗАПАХАМИ
+// 2. ФУНКЦИИ ДЛЯ РАБОТЫ С ЗАПАХАМИ
 // ============================================================
 
 function getAllScents() {
@@ -245,8 +155,158 @@ function findScentByName(text) {
 }
 
 // ============================================================
-// 6. ПАРСЕР СООБЩЕНИЙ (АВТОМАТИЧЕСКОЕ РАСПОЗНАВАНИЕ)
+// 3. СОСТОЯНИЕ (STATE)
 // ============================================================
+
+let state = {
+    enabled: true,
+    forceOmegaverse: true,
+    promptInterval: 10,
+    currentMessageCount: 0,
+    player: {
+        name: "Игрок",
+        status: 'beta',
+        fakeStatus: null,
+        role: 'none',
+        scent: { primary: null, secondary: null, nuance: null, territory: null },
+        cycle: { type: 'none', startDate: null, duration: 5, interval: 28, nextDate: null, active: false },
+        mark: { has: false, owner: null, target: null },
+        bond: { has: false, partner: null },
+        interests: { romantic: [], sexual: [] },
+        log: [],
+        trauma: null,
+        traumaDescription: '',
+    },
+    npcs: [],
+    calendar: { currentDate: null, season: 'spring', globalEvents: [], viewDate: null },
+    showFloating: true,
+    expandedMode: false,
+    activeTab: 'player',
+    autoDetect: {
+        enabled: true,
+        detectStatus: true,
+        detectCycle: true,
+        detectScent: true,
+        detectMark: true,
+        detectNewNpc: true,
+    },
+    minContextLength: 0,
+    cooldownMessages: 0,
+    lastTriggerMessageId: null,
+    memory: { facts: [], flashbackQueue: [], flashHistory: [] },
+};
+
+// ============================================================
+// 4. ЗАГРУЗКА / СОХРАНЕНИЕ
+// ============================================================
+
+function load() {
+    try {
+        const s = localStorage.getItem('ov');
+        if (s) {
+            const saved = JSON.parse(s);
+            state = deepMerge(state, saved);
+        }
+    } catch (e) { console.error('[OV] Load error:', e); }
+}
+
+function save() {
+    localStorage.setItem('ov', JSON.stringify(state));
+}
+
+function deepMerge(target, source) {
+    for (const key in source) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+            if (!target[key]) target[key] = {};
+            deepMerge(target[key], source[key]);
+        } else {
+            target[key] = source[key];
+        }
+    }
+    return target;
+}
+
+// ============================================================
+// 5. ПАМЯТЬ (ФАКТЫ)
+// ============================================================
+
+function addFact(text, category = 'events', importance = 'medium') {
+    if (!state.memory) state.memory = { facts: [], flashbackQueue: [], flashHistory: [] };
+    state.memory.facts.unshift({
+        id: 'fact_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        text: text,
+        category: category,
+        importance: importance,
+        ts: Date.now(),
+        disabled: false,
+    });
+    if (state.memory.facts.length > 200) state.memory.facts.length = 200;
+    save();
+}
+
+// ============================================================
+// 6. ТОСТЫ (УВЕДОМЛЕНИЯ)
+// ============================================================
+
+let toastSequence = 0;
+
+function ensureToastContainer() {
+    if (!document.getElementById('ov-toast-container')) {
+        const container = document.createElement('div');
+        container.id = 'ov-toast-container';
+        container.className = 'ov-toast-container';
+        document.body.appendChild(container);
+    }
+}
+
+function showToast({ title, text, variant = 'system', icon = 'fa-solid fa-circle-info' }) {
+    ensureToastContainer();
+    const container = document.getElementById('ov-toast-container');
+    const id = `ov-toast-${++toastSequence}`;
+    const variantClass = variant.toLowerCase();
+    const toastHtml = `
+        <div id="${id}" class="ov-toast ${variantClass}" style="--ov-toast-accent: var(--ov-${variantClass});">
+            <div class="ov-toast-glow"></div>
+            <div class="ov-toast-icon"><i class="${icon}"></i></div>
+            <div class="ov-toast-content">
+                <div class="ov-toast-title">${title}</div>
+                <div class="ov-toast-text">${text}</div>
+                <span class="ov-toast-progress"></span>
+            </div>
+        </div>
+    `;
+    container.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(id);
+    if (!toastElement) return;
+    requestAnimationFrame(() => toastElement.classList.add('is-visible'));
+    setTimeout(() => {
+        toastElement.dataset.state = 'closing';
+        toastElement.classList.remove('is-visible');
+        setTimeout(() => toastElement.remove(), 300);
+    }, 5000);
+}
+
+function notify(msg, variant = 'system', icon = 'fa-solid fa-circle-info') {
+    showToast({ title: 'Omegaverse', text: msg, variant, icon });
+}
+
+// ============================================================
+// 7. ПАРСЕР СООБЩЕНИЙ (АВТОМАТИЧЕСКОЕ РАСПОЗНАВАНИЕ)
+// ============================================================
+
+function parseNotesFromMessage(messageText) {
+    const noteRegex = /\[NOTE:\s*([^\]]+?)\s*\]/gi;
+    const remetteRegex = /\[REMETTE'S NOTE:\s*([^\]]+?)\s*\]/gi;
+    const notes = [];
+    let match;
+    while ((match = noteRegex.exec(messageText)) !== null) {
+        notes.push({ text: match[1].trim(), type: 'note' });
+    }
+    while ((match = remetteRegex.exec(messageText)) !== null) {
+        notes.push({ text: match[1].trim(), type: 'remette_note' });
+    }
+    return notes;
+}
 
 function parseMessageForOmegaverse(messageText, messageAuthor) {
     if (!state.autoDetect.enabled) return;
@@ -260,7 +320,7 @@ function parseMessageForOmegaverse(messageText, messageAuthor) {
         mark: null,
         bond: null,
         newNpc: null,
-        npcName: null
+        npcName: null,
     };
 
     // 1. Статус
@@ -268,7 +328,7 @@ function parseMessageForOmegaverse(messageText, messageAuthor) {
         const statusKeywords = {
             alpha: ['альфа', 'alpha', 'доминант', 'лидер'],
             omega: ['омега', 'omega', 'подчинённый', 'покорный'],
-            beta: ['бета', 'beta', 'нейтральный', 'средний']
+            beta: ['бета', 'beta', 'нейтральный', 'средний'],
         };
         for (const [status, keywords] of Object.entries(statusKeywords)) {
             for (const kw of keywords) {
@@ -285,7 +345,7 @@ function parseMessageForOmegaverse(messageText, messageAuthor) {
     if (state.autoDetect.detectCycle) {
         const cycleKeywords = {
             heat: ['течка', 'heat', 'период', 'цикл'],
-            rut: ['гон', 'rut', 'агрессия', 'доминирование']
+            rut: ['гон', 'rut', 'агрессия', 'доминирование'],
         };
         for (const [type, keywords] of Object.entries(cycleKeywords)) {
             for (const kw of keywords) {
@@ -316,18 +376,43 @@ function parseMessageForOmegaverse(messageText, messageAuthor) {
         }
     }
 
-    // 5. Поиск имени NPC (слова с заглавной буквы)
+    // --- ПАРСИНГ ЗАМЕТОК (НЕ ПЕРСОНАЖИ) ---
+    const notes = parseNotesFromMessage(messageText);
+    for (const note of notes) {
+        addFact(`Заметка: ${note.text}`, note.type === 'remette_note' ? 'secrets' : 'events', 'high');
+        notify(`📝 Обнаружена заметка: ${note.text.slice(0, 60)}${note.text.length > 60 ? '…' : ''}`, 'system', 'fa-solid fa-sticky-note');
+    }
+
+    // 5. Поиск имени NPC (только настоящие персонажи)
     const words = messageText.split(/\s+/);
     let foundName = null;
+    // Жёсткий список запрещённых слов — НИКОГДА НЕ ДОБАВЛЯТЬ КАК NPC
+    const forbiddenNames = new Set([
+        'note', 'remette', "remette's", 'remettes',
+        'ooc', 'system', 'author', 'user', 'player', 'narrator',
+        'рассказчик', 'автор', 'система', 'пользователь', 'игрок',
+    ]);
+
     for (const word of words) {
         if (word.length > 1 && /^[А-ЯЁA-Z]/.test(word)) {
             const name = word.replace(/[.,!?;:]/g, '');
-            if (name.toLowerCase() !== state.player.name.toLowerCase()) {
-                const exists = state.npcs.some(n => n.name.toLowerCase() === name.toLowerCase());
-                if (!exists) {
-                    foundName = name;
-                    break;
-                }
+            const lowerName = name.toLowerCase();
+
+            // Пропускаем запрещённые слова
+            if (forbiddenNames.has(lowerName)) {
+                continue;
+            }
+
+            // Пропускаем имя игрока
+            if (lowerName === state.player.name.toLowerCase()) {
+                continue;
+            }
+
+            // Проверяем, есть ли уже такой NPC
+            const exists = state.npcs.some(n => n.name.toLowerCase() === lowerName);
+            if (!exists) {
+                foundName = name;
+                break;
             }
         }
     }
@@ -339,6 +424,10 @@ function parseMessageForOmegaverse(messageText, messageAuthor) {
     // 6. Применяем изменения
     applyDetectedChanges(detected);
 }
+
+// ============================================================
+// 8. ПРИМЕНЕНИЕ ОБНАРУЖЕННЫХ ИЗМЕНЕНИЙ
+// ============================================================
 
 function applyDetectedChanges(detected) {
     if (detected.newNpc && state.autoDetect.detectNewNpc) {
@@ -358,7 +447,7 @@ function applyDetectedChanges(detected) {
                 avatar: '',
                 trauma: 'none',
                 traumaDescription: '',
-                lastUpdate: Date.now()
+                lastUpdate: Date.now(),
             };
             state.npcs.push(newNpc);
             addFact(`Появился новый персонаж: ${detected.newNpc} (${detected.status || 'Бета'})`, 'characters', 'high');
@@ -443,7 +532,7 @@ function applyDetectedChanges(detected) {
 }
 
 // ============================================================
-// 7. ГЕНЕРАЦИЯ СИСТЕМНОГО ПРОМПТА
+// 9. ГЕНЕРАЦИЯ СИСТЕМНОГО ПРОМПТА
 // ============================================================
 
 function buildOmegaversePrompt() {
@@ -494,7 +583,7 @@ function buildOmegaversePrompt() {
 
     let npcInfo = '';
     for (const npc of state.npcs) {
-        if (npc.status !== 'beta' || npc.cycle.type !== 'none' || npc.mark.has || npc.bond.has) {
+        if (npc.status !== 'beta' || npc.cycle.type !== 'none' || npc.mark.has || npc.bond.has || (npc.trauma && npc.trauma !== 'none')) {
             npcInfo += `\n- ${npc.name} (${statusMap[npc.status] || 'Бета'})`;
             if (npc.cycle.active) npcInfo += `, активный ${npc.cycle.type === 'heat' ? 'течка' : 'гон'}`;
             if (npc.mark.has) npcInfo += `, имеет метку${npc.mark.owner ? ` от ${npc.mark.owner}` : ''}`;
@@ -528,95 +617,7 @@ function applyOmegaversePrompt() {
 }
 
 // ============================================================
-// 8. КОНТЕКСТ, ТОСТЫ И ПРОЧЕЕ
-// ============================================================
-
-function getChatHistoryLength() {
-    const ctx = window.getContext();
-    if (!ctx || !ctx.chat || !ctx.chat.length) return 0;
-    return ctx.chat.reduce((sum, msg) => sum + (msg.mes?.length || 0), 0);
-}
-
-function getLastMessageId() {
-    const ctx = window.getContext();
-    if (!ctx || !ctx.chat) return 0;
-    return ctx.chat.length - 1;
-}
-
-function hasUserSexualHint() {
-    const ctx = window.getContext();
-    if (!ctx || !ctx.chat || ctx.chat.length === 0) return false;
-    let lastUserMsg = null;
-    for (let i = ctx.chat.length - 1; i >= 0; i--) {
-        if (ctx.chat[i].is_user) {
-            lastUserMsg = ctx.chat[i].mes;
-            break;
-        }
-    }
-    if (!lastUserMsg) return false;
-    const lowerMsg = lastUserMsg.toLowerCase();
-    const keywords = [
-        "sex","fuck","cock","pussy","dick","hard","wet","horny",
-        "kiss","touch","naked","undress","bed","moan","orgasm",
-        "раздева","голый","возбужд","траха","член","киска",
-        "поцелу","прикос","кровать","стон","кончить"
-    ];
-    return keywords.some(keyword => lowerMsg.includes(keyword));
-}
-
-function isCooldownActive() {
-    if (state.cooldownMessages <= 0) return false;
-    if (state.lastTriggerMessageId === null) return false;
-    const currentId = getLastMessageId();
-    const diff = currentId - state.lastTriggerMessageId;
-    return diff < state.cooldownMessages;
-}
-
-// ---- ТОСТЫ ----
-let toastSequence = 0;
-
-function ensureToastContainer() {
-    if (!document.getElementById('ov-toast-container')) {
-        const container = document.createElement('div');
-        container.id = 'ov-toast-container';
-        container.className = 'ov-toast-container';
-        document.body.appendChild(container);
-    }
-}
-
-function showToast({ title, text, variant = 'system', icon = 'fa-solid fa-circle-info' }) {
-    ensureToastContainer();
-    const container = document.getElementById('ov-toast-container');
-    const id = `ov-toast-${++toastSequence}`;
-    const variantClass = variant.toLowerCase();
-    const toastHtml = `
-        <div id="${id}" class="ov-toast ${variantClass}" style="--ov-toast-accent: var(--ov-${variantClass});">
-            <div class="ov-toast-glow"></div>
-            <div class="ov-toast-icon"><i class="${icon}"></i></div>
-            <div class="ov-toast-content">
-                <div class="ov-toast-title">${title}</div>
-                <div class="ov-toast-text">${text}</div>
-                <span class="ov-toast-progress"></span>
-            </div>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', toastHtml);
-    const toastElement = document.getElementById(id);
-    if (!toastElement) return;
-    requestAnimationFrame(() => toastElement.classList.add('is-visible'));
-    setTimeout(() => {
-        toastElement.dataset.state = 'closing';
-        toastElement.classList.remove('is-visible');
-        setTimeout(() => toastElement.remove(), 300);
-    }, 5000);
-}
-
-function notify(msg, variant = 'system', icon = 'fa-solid fa-circle-info') {
-    showToast({ title: 'Omegaverse', text: msg, variant, icon });
-}
-
-// ============================================================
-// 9. РЕНДЕРИНГ UI
+// 10. РЕНДЕРИНГ UI (ВКЛАДКИ, КАРТОЧКИ, НАСТРОЙКИ)
 // ============================================================
 
 function renderPlayerTabContent() {
@@ -756,11 +757,11 @@ function renderNpcListContent() {
         state.npcs.forEach((npc, index) => {
             const statusClass = `ov-status-${npc.status || 'beta'}`;
             const avatarStyle = npc.avatar ? `background-image: url('${npc.avatar}');` : '';
-            
+
             const isUpdated = (npc.lastUpdate && (Date.now() - npc.lastUpdate < 10000));
             const updateClass = isUpdated ? ' ov-npc-updated' : '';
             const updateIcon = isUpdated ? '<span style="color:#4ade80; font-size:12px; margin-left:6px; animation: ovUpdatedPulse 0.8s ease 3;">✦</span>' : '';
-            
+
             html += `
             <div class="ov-character-card${updateClass}" data-index="${index}">
                 <div class="ov-card-header" onclick="$(this).closest('.ov-character-card').toggleClass('open')">
@@ -895,6 +896,7 @@ function renderCalendarContent() {
     </div>
     `;
 
+    // Обработчики навигации будут назначены после рендера
     setTimeout(() => {
         $('#ov-cal-prev').off('click').on('click', function() {
             changeCalendarMonth(-1);
@@ -984,6 +986,10 @@ function renderSettingsContent() {
     return html;
 }
 
+// ============================================================
+// 11. ОБНОВЛЕНИЕ UI
+// ============================================================
+
 function updateUI() {
     const tabs = ['player', 'npcs', 'calendar', 'world', 'settings'];
     tabs.forEach(tab => {
@@ -1009,7 +1015,7 @@ function renderAllPanels() {
 }
 
 // ============================================================
-// 10. НАСТРОЙКИ В МЕНЮ РАСШИРЕНИЙ
+// 12. НАСТРОЙКИ В МЕНЮ РАСШИРЕНИЙ
 // ============================================================
 
 const ovSettingsHtml = `
@@ -1039,7 +1045,7 @@ const ovSettingsHtml = `
                 </button>
             </div>
             <div class="ov-ext-row" style="font-size:11px; opacity:0.5; margin-top:4px;">
-                NPC: <span id="ov-ext-npc-count">${state.npcs.length}</span> | 
+                NPC: <span id="ov-ext-npc-count">${state.npcs.length}</span> |
                 Статус: <span id="ov-ext-status">${state.player.status || 'beta'}</span>
             </div>
         </div>
@@ -1084,7 +1090,7 @@ function updateExtBadge() {
 }
 
 // ============================================================
-// 11. ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
+// 13. ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ (CRUD)
 // ============================================================
 
 function savePlayer() {
@@ -1187,7 +1193,7 @@ function addNpc(name) {
         avatar: '',
         trauma: 'none',
         traumaDescription: '',
-        lastUpdate: Date.now()
+        lastUpdate: Date.now(),
     };
     state.npcs.push(newNpc);
     save();
@@ -1197,13 +1203,14 @@ function addNpc(name) {
 }
 
 // ============================================================
-// 12. ЗАПУСК
+// 14. ЗАПУСК РАСШИРЕНИЯ
 // ============================================================
 
 jQuery(async () => {
     try {
         load();
 
+        // Добавляем настройки в меню расширений
         $('#extensions_settings2').append(ovExtStyles + ovSettingsHtml);
 
         const panelHtml = `
@@ -1231,6 +1238,7 @@ jQuery(async () => {
         `;
         $('body').append(panelHtml);
 
+        // Обработчики вкладок
         $('.ov-tab').on('click', function() {
             const tab = $(this).data('tab');
             state.activeTab = tab;
@@ -1238,6 +1246,7 @@ jQuery(async () => {
             renderAllPanels();
         });
 
+        // Мини-кнопка
         $('#ov-mini-btn').on('click', function(e) {
             e.stopPropagation();
             $('#ov-panel').toggleClass('ov-hidden');
@@ -1246,6 +1255,7 @@ jQuery(async () => {
             $('#ov-panel').addClass('ov-hidden');
         });
 
+        // Drag & drop панели
         let isDragging = false;
         let offset = { x: 0, y: 0 };
         const $panel = $('#ov-panel');
@@ -1275,6 +1285,7 @@ jQuery(async () => {
             isDragging = false;
         });
 
+        // Обработчики для настроек в меню расширений
         $('#ov-ext-show-float').prop('checked', state.showFloating).on('change', function() {
             state.showFloating = this.checked;
             applyFloatVisibility();
@@ -1290,6 +1301,7 @@ jQuery(async () => {
             $('#ov-panel').removeClass('ov-hidden');
         });
 
+        // Обработчики внутри панели
         $(document).on('click', '#ov-player-save', savePlayer);
         $(document).on('click', '#ov-player-random', function() {
             randomizePlayer();
@@ -1315,12 +1327,12 @@ jQuery(async () => {
             const index = $(this).data('index');
             const npc = state.npcs[index];
             if (!npc) return;
-            
+
             const newName = prompt('Изменить имя:', npc.name);
             if (newName && newName.trim()) {
                 npc.name = newName.trim();
             }
-            
+
             const traumaSelect = $(`.ov-npc-trauma[data-index="${index}"]`);
             const traumaDesc = $(`.ov-npc-trauma-desc[data-index="${index}"]`);
             if (traumaSelect.length) {
@@ -1329,7 +1341,7 @@ jQuery(async () => {
             if (traumaDesc.length) {
                 npc.traumaDescription = traumaDesc.val();
             }
-            
+
             save();
             updateUI();
             renderAllPanels();
@@ -1407,6 +1419,7 @@ jQuery(async () => {
         updateUI();
         applyOmegaversePrompt();
 
+        // ---- ПАРСИНГ СООБЩЕНИЙ ----
         eventSource.on(event_types.MESSAGE_RECEIVED, (messageId) => {
             const context = SillyTavern.getContext();
             const chat = context.chat;
@@ -1429,7 +1442,7 @@ jQuery(async () => {
             }
         });
 
-        console.log('[OV] Omegaverse Dynamics v0.6.0 готово! (с памятью и травмами)');
+        console.log('[OV] Omegaverse Dynamics v1.0.0 готово! (с автообнаружением)');
     } catch (error) {
         console.error('[OV] Error:', error);
     }
