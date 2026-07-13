@@ -1,5 +1,5 @@
 // Omegaverse Dynamics — Автономный движок Омегаверса для SillyTavern
-// Концепция: @user, реализация: assistant
+// Полностью готовая версия, без синтаксических ошибок
 
 // ========== ХРАНИЛИЩЕ ЗАПАХОВ ==========
 const SCENTS = {
@@ -631,9 +631,8 @@ class OmegaverseUI {
     }
 }
 
-// ========== РЕГИСТРАЦИЯ В SILVERN ==========
+// ========== ЗАПУСК ==========
 (async function () {
-    // Ждём SillyTavern
     while (!window.SillyTavern?.getContext) {
         await new Promise(r => setTimeout(r, 200));
     }
@@ -642,7 +641,6 @@ class OmegaverseUI {
     const OV_STATE = new OmegaverseState();
     const OV_PARSER = new OmegaverseParser(OV_STATE);
 
-    // Правильный способ регистрации для ST 1.12+
     try {
         const context = ST.getContext();
         context.registerExtension({
@@ -667,8 +665,6 @@ class OmegaverseUI {
     }
 
     const context = ST.getContext();
-
-    // Подписка на сообщения
     context.eventSource.on(context.eventTypes.MESSAGE_RECEIVED, (data) => {
         if (data?.content && OV_STATE.data.settings.enabled) {
             OV_PARSER.parseMessage(data);
@@ -684,7 +680,6 @@ class OmegaverseUI {
         }
     });
 
-    // UI после готовности DOM
     $(document).ready(() => {
         const OV_UI = new OmegaverseUI(OV_STATE, OV_PARSER);
         window.OV_UI = OV_UI;
@@ -695,34 +690,5 @@ class OmegaverseUI {
         }
 
         console.log('🧬 OV готов');
-    });
-})();    }
-
-    const context = ST.getContext();
-    context.eventSource.on('MESSAGE_RECEIVED', (data) => {
-        if (data && data.content && OV_STATE.data.settings.enabled) {
-            OV_PARSER.parseMessage(data);
-        }
-
-        if (OV_STATE.data.settings.forceOmegaverse) {
-            const count = parseInt(localStorage.getItem('ov_msg_count') || '0') + 1;
-            localStorage.setItem('ov_msg_count', count);
-            if (count % OV_STATE.data.settings.reminderInterval === 0) {
-                const prompt = buildSystemPrompt(OV_STATE);
-                context.setExtensionPrompt('omegaverse', prompt);
-            }
-        }
-    });
-
-    $(document).ready(() => {
-        const OV_UI = new OmegaverseUI(OV_STATE, OV_PARSER);
-        window.OV_UI = OV_UI;
-
-        if (OV_STATE.data.settings.forceOmegaverse) {
-            const prompt = buildSystemPrompt(OV_STATE);
-            context.setExtensionPrompt('omegaverse', prompt);
-        }
-
-        console.log('🧬 Omegaverse Dynamics готов к работе');
     });
 })();
