@@ -73,10 +73,10 @@ const SCENT_CATEGORIES = {
             { id: 'chypre_patchouli', name: 'Шипр с пачули', desc: 'Землистая глубина и стойкость.', tags: ['alpha', 'unisex'] }
         ]
     }
-}; // <-- ИСПРАВЛЕНО: Закрывает chypre и весь объект SCENT_CATEGORIES
+};
 
 // ============================================================
-// 2. СОСТОЯНИЕ (добавлены настройки автообнаружения)
+// 2. СОСТОЯНИЕ ДЕФОЛТНОЕ
 // ============================================================
 let state = {
     npcs: [],
@@ -95,7 +95,7 @@ let state = {
 };
 
 // ============================================================
-// 3. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// 3. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ И ГЛУБОКАЯ МИГРАЦИЯ
 // ============================================================
 function getScentById(scentId) {
     for (const cat in SCENT_CATEGORIES) {
@@ -114,19 +114,48 @@ function load() {
     if (saved) {
         try {
             const parsed = JSON.parse(saved);
-            state = Object.assign({}, state, parsed);
-            if (!state.autoDetect) {
-                state.autoDetect = {
-                    detectNewNpc: true,
-                    detectStatus: true,
-                    detectCycle: true,
-                    detectScent: true,
-                    detectMark: true,
-                    detectBond: true
-                };
+            
+            // Базовое восстановление корневых настроек
+            state.promptInterval = parsed.promptInterval ?? 5;
+            state.currentMessageCount = parsed.currentMessageCount ?? 0;
+            state.showFloating = parsed.showFloating ?? true;
+            state.promptWeight = parsed.promptWeight ?? '0.5';
+            
+            // Настройки детекции
+            state.autoDetect = Object.assign({
+                detectNewNpc: true,
+                detectStatus: true,
+                detectCycle: true,
+                detectScent: true,
+                detectMark: true,
+                detectBond: true
+            }, parsed.autoDetect || {});
+
+            // Глубокая нормализация каждого NPC (Защита от крашей старой базы)
+            if (parsed.npcs && Array.isArray(parsed.npcs)) {
+                state.npcs = parsed.npcs.map(npc => {
+                    return {
+                        name: npc.name || 'Неизвестный',
+                        status: npc.status || 'beta',
+                        fakeStatus: npc.fakeStatus || null,
+                        role: npc.role || 'none',
+                        scent: Object.assign({ primary: null, secondary: null, nuance: null, territory: null }, npc.scent || {}),
+                        cycle: Object.assign({ type: 'none', duration: 5, interval: 28, nextDate: null, active: false }, npc.cycle || {}),
+                        mark: Object.assign({ has: false, owner: null, target: null }, npc.mark || {}),
+                        bond: Object.assign({ has: false, partner: null }, npc.bond || {}),
+                        interests: Object.assign({ romantic: [], sexual: [] }, npc.interests || {}),
+                        log: Array.isArray(npc.log) ? npc.log : [],
+                        avatar: npc.avatar || '',
+                        trauma: npc.trauma || 'none',
+                        traumaDescription: npc.traumaDescription || '',
+                        lastUpdate: npc.lastUpdate || Date.now()
+                    };
+                });
+            } else {
+                state.npcs = [];
             }
         } catch (e) {
-            console.error('[' + extensionName + '] Ошибка загрузки:', e);
+            console.error('[' + extensionName + '] Ошибка загрузки и миграции:', e);
         }
     }
 }
@@ -172,13 +201,13 @@ function generateSystemPrompt() {
             npcPrompt += ` Роль в иерархии: ${npc.role}.`;
         }
         let scents = [];
-        if (npc.scent.primary) {
+        if (npc.scent && npc.scent.primary) {
             const s = getScentById(npc.scent.primary);
             scents.push(`основной: ${s ? s.name : npc.scent.primary}`);
         }
-        if (npc.scent.secondary) scents.push(`второстепенный: ${npc.scent.secondary}`);
-        if (npc.scent.nuance) scents.push(`нюанс: ${npc.scent.nuance}`);
-        if (npc.scent.territory) scents.push(`территориальный: ${npc.scent.territory}`);
+        if (npc.scent && npc.scent.secondary) scents.push(`второстепенный: ${npc.scent.secondary}`);
+        if (npc.scent && npc.scent.nuance) scents.push(`нюанс: ${npc.scent.nuance}`);
+        if (npc.scent && npc.scent.territory) scents.push(`территориальный: ${npc.scent.territory}`);
         if (scents.length > 0) {
             npcPrompt += ` Запах (${scents.join(', ')}).`;
         }
@@ -230,7 +259,7 @@ function addNpc(name) {
         interests: { romantic: [], sexual: [] },
         log: [],
         avatar: '',
-        trauma: 'none', // ИСПРАВЛЕНО: дублирование lastUpdate убрано
+        trauma: 'none',
         traumaDescription: '',
         lastUpdate: Date.now()
     };
@@ -259,34 +288,29 @@ function parseMessageForOmegaverse(text, sender) {
     console.log('[OV Debug] Начинаем парсинг текста от:', sender);
     const rules = [];
     if (state.autoDetect.detectNewNpc) {
-        rules.push("Если в тексте появляется или активно упоминается новый персонаж, которого нет в списке, укажи его имя в 'newNpc'. Также попробуй сразу определить его пол ('alpha', 'beta', 'omega', 'enigma'). Если персонаж уже есть в списке — поле 'newNpc' должно быть строго null.");
+        rules.push("Если в тексте появляется новый персонаж, укажи его имя в 'newNpc' и пол ('alpha', 'beta', 'omega', 'enigma'). Если персонаж уже есть в списке — поле 'newNpc' должно быть строго null.");
     }
     if (state.autoDetect.detectStatus) {
-        rules.push("Определи вторичный пол персонажа (из контекста или если он изменился/раскрылся): 'alpha', 'beta', 'omega', 'enigma'. Запиши в 'status'. Если нет явных указаний, оставь null.");
+        rules.push("Определи вторичный пол персонажа: 'alpha', 'beta', 'omega', 'enigma'. Запиши в 'status'.");
     }
     if (state.autoDetect.detectCycle) {
-        rules.push("Определи, начался ли у персонажа гон или течка. Возможные значения для 'cycle': 'heat' (течка), 'rut' (гон), 'none' (завершился или отсутствует). Если упоминания нет, верни null.");
+        rules.push("Определи, начался ли у персонажа гон или течка. 'cycle': 'heat' (течка), 'rut' (гон), 'none' (завершился).");
     }
     if (state.autoDetect.detectScent) {
         rules.push("Определи базовый запах персонажа. Выбери наиболее подходящий строгий ID запаха из доступного списка: " +
             Object.keys(SCENT_CATEGORIES).map(c => SCENT_CATEGORIES[c].scents.map(s => s.id).join(', ')).join(', ') +
-            ". Если запах уникальный и его нет в списке, запиши его строкой (например, 'лаванда'). Если упоминания запаха нет, верни null.");
+            ". Если упоминания запаха нет, верни null.");
     }
     if (state.autoDetect.detectMark) {
-        rules.push("Определи, была ли поставлена метка (укус в шею) в этом сообщении. Если да, установи 'mark' в true, иначе null.");
+        rules.push("Определи, была ли поставлена метка (укус в шею). Если да, установи 'mark' в true, иначе null.");
     }
     if (state.autoDetect.detectBond) {
-        rules.push("Определи, сформировалась ли истинная связь между персонажами в этом сообщении. Если да, установи 'bond' в true, иначе null.");
+        rules.push("Определи, сформировалась ли истинная связь. Если да, установи 'bond' в true, иначе null.");
     }
 
     if (rules.length === 0) return;
 
     const systemInstruction = `Ты — вспомогательный модуль анализа скрытой динамики мира (Омегаверс). Твоя задача — проанализировать последнее сообщение и вернуть СТРОГИЙ JSON объект с изменениями.
-Правила анализа:
-${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
-
-ВАЖНО: Поле 'newNpc' должно содержать имя персонажа ТОЛЬКО если это абсолютно новый персонаж, которого нужно добавить в систему. Если речь идет о персонаже, который уже существует, или о действиях главного героя/собеседника, имя которого уже известно системе, поле 'newNpc' должно быть null, а все остальные изменения (status, cycle, scent) должны относиться к этому существующему персонажу (в этом случае логика скрипта автоматически свяжет изменения по контексту, но ты должен вернуть 'newNpc': null, а имя существующего персонажа, если необходимо для привязки изменений, можешь не указывать, скрипт привяжет к текущему говорящему боту). Стоп, давай сделаем проще: если персонаж уже существует, укажи его имя в 'newNpc', чтобы скрипт знал, КОМУ обновлять параметры, но скрипт проверит, если он есть — он просто обновит параметры, а не создаст дубликат! Да, точно: 'newNpc' должен ВСЕГДА содержать имя персонажа, у которого зафиксированы изменения.
-
 Возвращай ТОЛЬКО чистый JSON объект следующего вида (без markdown, без \`\`\`json):
 {
   "newNpc": "Имя Персонажа или null",
@@ -301,10 +325,8 @@ ${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
     const chat = context.chat;
     const lastMessages = chat.slice(-3).map(m => `${m.name}: ${m.mes}`).join('\n\n');
 
-    console.log('[OV Debug] Отправляем запрос в LLM для детекции изменений...');
     SillyTavern.requestGenericCompletion(systemInstruction, lastMessages)
         .then(response => {
-            console.log('[OV Debug] Получен ответ от LLM:', response);
             try {
                 const cleaned = response.replace(/```json/g, '').replace(/```/g, '').trim();
                 const detected = JSON.parse(cleaned);
@@ -312,7 +334,7 @@ ${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                     applyDetectedChanges(detected);
                 }
             } catch (err) {
-                console.error('[OV Детектор] Не удалось распарсить JSON ответ:', err, response);
+                console.error('[OV Детектор] Не удалось распарсить JSON ответ:', err);
             }
         })
         .catch(err => {
@@ -324,7 +346,6 @@ function applyDetectedChanges(detected) {
     let hasChanged = false;
     let npc = null;
 
-    // 1. Поиск или создание NPC
     if (detected.newNpc) {
         npc = state.npcs.find(n => n.name.toLowerCase() === detected.newNpc.toLowerCase());
         
@@ -347,16 +368,13 @@ function applyDetectedChanges(detected) {
             };
             state.npcs.push(npc);
             notify(`Обнаружен новый персонаж: ${detected.newNpc} (${getStatusLabel(npc.status)})`, 'system', 'fa-solid fa-user-plus');
-            
-            // Запись факта создания вынесена из цикла
             addFact(npc, 'creation', `Персонаж автоматически добавлен в систему со статусом "${getStatusLabel(npc.status)}"`);
             hasChanged = true;
         }
     }
 
-    if (!npc) return; // Если персонажа нет и создать не удалось, выходим
+    if (!npc) return;
 
-    // 2. Изменение статуса (у существующего персонажа)
     if (detected.status && state.autoDetect.detectStatus && npc.status !== detected.status) {
         npc.status = detected.status;
         npc.lastUpdate = Date.now();
@@ -365,7 +383,6 @@ function applyDetectedChanges(detected) {
         hasChanged = true;
     }
 
-    // 3. Изменение цикла (течка / гон)
     if (detected.cycle && state.autoDetect.detectCycle && npc.cycle.type !== detected.cycle) {
         const cycleType = detected.cycle;
         npc.cycle.type = cycleType;
@@ -388,7 +405,6 @@ function applyDetectedChanges(detected) {
         hasChanged = true;
     }
 
-    // 4. Изменение запаха
     if (detected.scent && state.autoDetect.detectScent && npc.scent.primary !== detected.scent) {
         npc.scent.primary = detected.scent;
         npc.lastUpdate = Date.now();
@@ -399,7 +415,6 @@ function applyDetectedChanges(detected) {
         hasChanged = true;
     }
 
-    // 5. Появление метки
     if (detected.mark && state.autoDetect.detectMark && !npc.mark.has) {
         npc.mark.has = true;
         npc.lastUpdate = Date.now();
@@ -408,7 +423,6 @@ function applyDetectedChanges(detected) {
         hasChanged = true;
     }
 
-    // 6. Установление связи (Бонд)
     if (detected.bond && state.autoDetect.detectBond && !npc.bond.has) {
         npc.bond.has = true;
         npc.lastUpdate = Date.now();
@@ -417,7 +431,6 @@ function applyDetectedChanges(detected) {
         hasChanged = true;
     }
 
-    // ИСПРАВЛЕНО: Дублирующиеся блоки addFact() удалены. Все сохранения и обновления UI происходят один раз в конце функции.
     if (hasChanged) {
         save();
         updateUI();
@@ -450,15 +463,15 @@ function renderNpcListContent() {
 
     state.npcs.forEach((npc, index) => {
         let scents = [];
-        if (npc.scent.primary) {
+        if (npc.scent && npc.scent.primary) {
             const s = getScentById(npc.scent.primary);
             scents.push(s ? s.name : npc.scent.primary);
         }
-        if (npc.scent.secondary) scents.push(npc.scent.secondary);
+        if (npc.scent && npc.scent.secondary) scents.push(npc.scent.secondary);
         const scentText = scents.length > 0 ? scents.join(' + ') : 'Не определен';
 
-        let cycleStatus = getCycleLabel(npc.cycle.type);
-        if (npc.cycle.active && npc.cycle.type !== 'none') {
+        let cycleStatus = getCycleLabel(npc.cycle ? npc.cycle.type : 'none');
+        if (npc.cycle && npc.cycle.active && npc.cycle.type !== 'none') {
             cycleStatus += ' (Активен)';
         }
 
@@ -470,10 +483,10 @@ function renderNpcListContent() {
                 </div>
                 <div class="ov-card-grid">
                     <div><strong>Пол:</strong> <span class="ov-badge ${npc.status}">${getStatusLabel(npc.status)}</span></div>
-                    <div><strong>Цикл:</strong> <span class="ov-badge-cycle ${npc.cycle.active ? 'active' : ''}">${cycleStatus}</span></div>
+                    <div><strong>Цикл:</strong> <span class="ov-badge-cycle ${npc.cycle && npc.cycle.active ? 'active' : ''}">${cycleStatus}</span></div>
                     <div class="ov-fullwidth"><strong>Запах:</strong> <span>${scentText}</span></div>
-                    <div><strong>Метка:</strong> <span>${npc.mark.has ? 'Есть' : 'Нет'}</span></div>
-                    <div><strong>Связь:</strong> <span>${npc.bond.has ? 'Есть' : 'Нет'}</span></div>
+                    <div><strong>Метка:</strong> <span>${npc.mark && npc.mark.has ? 'Есть' : 'Нет'}</span></div>
+                    <div><strong>Связь:</strong> <span>${npc.bond && npc.bond.has ? 'Есть' : 'Нет'}</span></div>
                 </div>
                 
                 <div class="ov-trauma-section">
@@ -503,7 +516,7 @@ function openEditModal(index) {
     for (const cat in SCENT_CATEGORIES) {
         scentOptions += `<optgroup label="${SCENT_CATEGORIES[cat].name}">`;
         SCENT_CATEGORIES[cat].scents.forEach(s => {
-            scentOptions += `<option value="${s.id}" ${npc.scent.primary === s.id ? 'selected' : ''}>${s.name}</option>`;
+            scentOptions += `<option value="${s.id}" ${npc.scent && npc.scent.primary === s.id ? 'selected' : ''}>${s.name}</option>`;
         });
         scentOptions += `</optgroup>`;
     }
@@ -531,15 +544,15 @@ function openEditModal(index) {
                 <div class="ov-field-group">
                     <label>Состояние цикла:</label>
                     <select id="modal-cycle-type">
-                        <option value="none" ${npc.cycle.type === 'none' ? 'selected' : ''}>Нет</option>
-                        <option value="heat" ${npc.cycle.type === 'heat' ? 'selected' : ''}>Течка</option>
-                        <option value="rut" ${npc.cycle.type === 'rut' ? 'selected' : ''}>Гон</option>
+                        <option value="none" ${npc.cycle && npc.cycle.type === 'none' ? 'selected' : ''}>Нет</option>
+                        <option value="heat" ${npc.cycle && npc.cycle.type === 'heat' ? 'selected' : ''}>Течка</option>
+                        <option value="rut" ${npc.cycle && npc.cycle.type === 'rut' ? 'selected' : ''}>Гон</option>
                     </select>
                 </div>
 
                 <div class="ov-checkbox-group">
-                    <label><input type="checkbox" id="modal-mark" ${npc.mark.has ? 'checked' : ''}> Наличие метки</label>
-                    <label><input type="checkbox" id="modal-bond" ${npc.bond.has ? 'checked' : ''}> Наличие связи</label>
+                    <label><input type="checkbox" id="modal-mark" ${npc.mark && npc.mark.has ? 'checked' : ''}> Наличие метки</label>
+                    <label><input type="checkbox" id="modal-bond" ${npc.bond && npc.bond.has ? 'checked' : ''}> Наличие связи</label>
                 </div>
 
                 <div class="ov-modal-buttons">
@@ -558,10 +571,14 @@ function openEditModal(index) {
 
     $('#ov-modal-save').on('click', function() {
         npc.status = $('#modal-status').val();
+        if(!npc.scent) npc.scent = {};
         npc.scent.primary = $('#modal-scent-primary').val();
+        if(!npc.cycle) npc.cycle = {};
         npc.cycle.type = $('#modal-cycle-type').val();
         npc.cycle.active = npc.cycle.type !== 'none';
+        if(!npc.mark) npc.mark = {};
         npc.mark.has = $('#modal-mark').is(':checked');
+        if(!npc.bond) npc.bond = {};
         npc.bond.has = $('#modal-bond').is(':checked');
         npc.lastUpdate = Date.now();
 
@@ -655,7 +672,6 @@ jQuery(() => {
 
     $('body').append(panelHtml);
 
-    // Добавление стилей модуля
     const styles = `
         .ov-main-panel { position: fixed; top: 80px; right: 20px; width: 380px; max-height: 80vh; background: var(--nav-bar-bg, #222); border: 1px solid var(--borderColor, #444); border-radius: 8px; z-index: 9999; display: none; flex-direction: column; color: var(--text-color, #fff); font-family: sans-serif; }
         .ov-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--borderColor, #444); }
@@ -704,7 +720,6 @@ jQuery(() => {
     `;
     $('head').append(`<style>${styles}</style>`);
 
-    // Кнопка в верхней панели СиллиТаверн (ST Third-party extension icon entry)
     const topBarButton = $(`<div class="ov-topbar-icon extensionsMenuExtensionButton" title="Динамика Омегаверса"><i class="fa-solid fa-dna"></i></div>`);
     $('#extensionsMenu').append(topBarButton);
 
@@ -722,7 +737,6 @@ jQuery(() => {
     $('#ov-mini-btn').on('click', togglePanel);
     $('#ov-close-btn').on('click', () => $('#omegaverse-dynamics-panel').fadeOut(150));
 
-    // Переключение вкладок
     $('.ov-tab-btn').on('click', function() {
         $('.ov-tab-btn').removeClass('active');
         $(this).addClass('active');
@@ -731,7 +745,6 @@ jQuery(() => {
         $(`#ov-tab-${tab}`).addClass('active');
     });
 
-    // Обработчики добавления и удаления
     $('#ov-add-npc-btn').on('click', () => {
         const nameInput = $('#ov-new-npc-name');
         const name = nameInput.val().trim();
@@ -752,7 +765,6 @@ jQuery(() => {
         openEditModal(idx);
     });
 
-    // ИСПРАВЛЕНО (Пункт 4 из вашего списка): Добавление сохранения полей травмы через .ov-edit-btn
     $(document).on('change', '.ov-trauma-select', function() {
         const idx = $(this).data('index');
         if (state.npcs[idx]) {
@@ -773,7 +785,6 @@ jQuery(() => {
         }
     });
 
-    // Обработчики изменений глобальных настроек
     $(document).on('change', '#ov-cfg-interval', function() {
         state.promptInterval = parseInt($(this).val()) || 5;
         save();
@@ -791,7 +802,6 @@ jQuery(() => {
         applyFloatVisibility();
     });
 
-    // Обработчики настроек детекции
     $(document).on('change', '#ov-det-npc', function() { state.autoDetect.detectNewNpc = $(this).is(':checked'); save(); });
     $(document).on('change', '#ov-det-status', function() { state.autoDetect.detectStatus = $(this).is(':checked'); save(); });
     $(document).on('change', '#ov-det-cycle', function() { state.autoDetect.detectCycle = $(this).is(':checked'); save(); });
@@ -799,7 +809,6 @@ jQuery(() => {
     $(document).on('change', '#ov-det-mark', function() { state.autoDetect.detectMark = $(this).is(':checked'); save(); });
     $(document).on('change', '#ov-det-bond', function() { state.autoDetect.detectBond = $(this).is(':checked'); save(); });
 
-    // Экспорт / Импорт настроек
     $(document).on('click', '#ov-export-btn', () => {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
         const downloadAnchor = document.createElement('a');
@@ -844,19 +853,19 @@ jQuery(() => {
         }
     }
 
+    // Инициализация интерфейса (теперь гарантированно защищена от падений)
     renderAllPanels();
     applyFloatVisibility();
     updateUI();
     applyOmegaversePrompt();
 
-    // ---- ПАРСИНГ СООБЩЕНИЙ С СЕРВЕРА ----
+    // ---- ИНТЕГРАЦИЯ СОБЫТИЙ SILLYTAVERN ----
     eventSource.on(event_types.MESSAGE_RECEIVED, (messageId) => {
         const context = SillyTavern.getContext();
         const chat = context.chat;
         if (!chat || !chat.length) return;
         const msg = chat[chat.length - 1];
         if (!msg) return;
-        // Автоматически сканируем только сообщения персонажей (ботов)
         if (!msg.is_user) {
             parseMessageForOmegaverse(msg.mes, 'bot');
         }
