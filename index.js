@@ -1,384 +1,877 @@
-import { registerExtension } from "../../extensions.js";
+import { setExtensionPrompt, extension_prompt_types, eventSource, event_types } from '../../../../script.js';
+
+const extensionName = 'omegaverse-dynamics';
 
 // ============================================================
-// 1. БАЗА ДАННЫХ АРОМАТОВ (ДЛЯ СЕЛЕКТОРОВ)
+// 1. ДАННЫЕ: ЗАПАХИ (только для Омегаверса)
 // ============================================================
-const SCENTS = [
-    { id: 'wood', name: '🪵 Сандал и кедр', statuses: ['alpha'] },
-    { id: 'mint', name: '🌿 Ледяная мята', statuses: ['alpha', 'beta'] },
-    { id: 'citrus', name: '🍋 Горький цитрус', statuses: ['alpha'] },
-    { id: 'leather', name: '💼 Дорогая кожа и табак', statuses: ['alpha'] },
-    { id: 'vanilla', name: '🍦 Нежная ваниль', statuses: ['omega'] },
-    { id: 'strawberry', name: '🍓 Спелая земляника', statuses: ['omega'] },
-    { id: 'lavender', name: '🪻 Успокаивающая лаванда', statuses: ['omega', 'beta'] },
-    { id: 'peach', name: '🍑 Сочный белый персик', statuses: ['omega'] },
-    { id: 'coffee', name: '☕ Крепкий чёрный кофе', statuses: ['alpha', 'beta'] },
-    { id: 'sea', name: '🌊 Морской бриз и соль', statuses: ['beta'] }
-];
+
+const SCENT_CATEGORIES = {
+    gentle: {
+        name: "Нежные",
+        icon: "fa-solid fa-feather",
+        scents: [
+            { id: 'lily_of_valley', name: 'Ландыш', desc: 'Чистый, прохладный, с минимальным содержанием пудровых нот.', tags: ['omega', 'unisex'] },
+            { id: 'violet', name: 'Фиалка', desc: 'Пудровая, мягкая, иногда с оттенками зелени.', tags: ['omega', 'unisex'] },
+            { id: 'rose', name: 'Роза', desc: 'В нежных ароматах используется для создания воздушной текстуры.', tags: ['omega', 'unisex'] },
+            { id: 'peach', name: 'Персик', desc: 'Бархатистый, не кислый, часто ассоциируется с текстурой крема.', tags: ['omega', 'unisex'] },
+            { id: 'vanilla', name: 'Ваниль', desc: 'В умеренных количествах придаёт тёплую, обволакивающую нежность.', tags: ['omega', 'unisex'] },
+            { id: 'honey', name: 'Мёд', desc: 'Сладкий, тягучий, но в нежной категории — разреженный, как липовый.', tags: ['omega', 'unisex'] }
+        ]
+    },
+    sweet: {
+        name: "Сладкие / Гурманские",
+        icon: "fa-solid fa-cake-candles",
+        scents: [
+            { id: 'caramel', name: 'Карамель', desc: 'Интенсивный, сливочно-сладкий, кондитерский.', tags: ['omega'] },
+            { id: 'chocolate', name: 'Шоколад', desc: 'Плотный, тёплый, от горького до молочного какао.', tags: ['omega', 'beta'] },
+            { id: 'cinnamon', name: 'Корица', desc: 'Пряная, сухая сладость, согревающая.', tags: ['omega', 'alpha'] },
+            { id: 'coconut', name: 'Кокос', desc: 'Экзотический, кремовый, выраженно сладкий.', tags: ['omega'] },
+            { id: 'strawberry', name: 'Клубника', desc: 'Яркий, сочный, карамельно-ягодный.', tags: ['omega'] }
+        ]
+    },
+    fresh: {
+        name: "Свежие / Озоновые",
+        icon: "fa-solid fa-wind",
+        scents: [
+            { id: 'mint', name: 'Мята', desc: 'Прохладный, ментоловый, резко освежающий.', tags: ['alpha', 'unisex'] },
+            { id: 'sea_salt', name: 'Морская соль', desc: 'Минеральный, холодный, акватический.', tags: ['alpha', 'unisex'] },
+            { id: 'rain', name: 'Озон / Дождь', desc: 'Запах грозы, влажного асфальта, разреженного воздуха.', tags: ['alpha', 'unisex'] },
+            { id: 'eucalyptus', name: 'Эвкалипт', desc: 'Камфорный, лекарственно-свежий, пронзительный.', tags: ['alpha'] },
+            { id: 'citrus_mix', name: 'Цитрусовый микс', desc: 'Лайм, лимон, грейпфрут. Кислый, бодрящий.', tags: ['alpha', 'unisex'] }
+        ]
+    },
+    woody: {
+        name: "Древесные / Смолистые",
+        icon: "fa-solid fa-tree",
+        scents: [
+            { id: 'sandalwood', name: 'Сандал', desc: 'Сливочно-древесный, тёплый, медитативный.', tags: ['alpha', 'beta', 'unisex'] },
+            { id: 'cedar', name: 'Кедр', desc: 'Сухой, хвойный, благородный карандашный оттенок.', tags: ['alpha'] },
+            { id: 'pine', name: 'Сосна / Смола', desc: 'Резкий хвойный, янтарный, лесной.', tags: ['alpha'] },
+            { id: 'vetiver', name: 'Ветивер', desc: 'Дымный, земляной, горько-древесный.', tags: ['alpha'] },
+            { id: 'oud', name: 'Уд', desc: 'Глубокий, анималистичный, дорогой, древесно-кожаный.', tags: ['alpha'] }
+        ]
+    },
+    tart: {
+        name: "Терпкие / Пряные",
+        icon: "fa-solid fa-pepper-hot",
+        scents: [
+            { id: 'leather', name: 'Кожа', desc: 'Дорогой салон, куртка, дегтярный оттенок. Грубый.', tags: ['alpha'] },
+            { id: 'tobacco', name: 'Табак', desc: 'Сухой табачный лист, дорогой сигарный дым.', tags: ['alpha', 'unisex'] },
+            { id: 'black_pepper', name: 'Чёрный перец', desc: 'Острый, щекочущий нос, горячий.', tags: ['alpha'] },
+            { id: 'coffee', name: 'Горький кофе', desc: 'Обжаренные зёрна, эспрессо, без сладости.', tags: ['alpha', 'beta'] },
+            { id: 'whiskey', name: 'Алкоголь / Виски', desc: 'Торфяной, дубовая бочка, согревающий.', tags: ['alpha'] }
+        ]
+    },
+    chypre: {
+        name: "Шипровые",
+        icon: "fa-solid fa-mountain",
+        scents: [
+            { id: 'chypre_classic', name: 'Классический шипр', desc: 'Цитрусы, дубовый мох, пачули, лабданум. Строгий, собранный.', tags: ['alpha', 'unisex'] },
+            { id: 'chypre_bergamot', name: 'Шипр с бергамотом', desc: 'Искрящийся старт и контраст с мхом.', tags: ['alpha', 'unisex'] },
+            { id: 'chypre_oakmoss', name: 'Шипр с дубовым мхом', desc: 'Сухая, прохладная «зелёность» и структура.', tags: ['alpha', 'unisex'] },
+            { id: 'chypre_patchouli', name: 'Шипр с пачули', desc: 'Землистая глубина и стойкость.', tags: ['alpha', 'unisex'] }
+        ]
+    }
+}; // <-- ИСПРАВЛЕНО: Закрывает chypre и весь объект SCENT_CATEGORIES
 
 // ============================================================
-// 2. ГЛОБАЛЬНОЕ СОСТОЯНИЕ РАСШИРЕНИЯ
+// 2. СОСТОЯНИЕ (добавлены настройки автообнаружения)
 // ============================================================
 let state = {
-    activeTab: 'player',
-    enabled: true,
-    autoDetect: true,
-    promptInterval: 10,
-    calendar: {
-        currentDate: new Date().toISOString().split('T')[0],
-        viewDate: new Date().toISOString().split('T')[0],
-        season: 'spring',
-        globalEvents: []
-    },
-    player: {
-        status: 'omega',
-        scent: { primary: 'vanilla' },
-        role: 'Омега-изгой',
-        cycle: { active: false, type: 'none' }
-    },
-    npcs: [
-        { name: "Алекс", status: "omega", scent: { primary: "strawberry" }, cycle: { active: true, type: "heat", startDate: "2026-07-15" }, trauma: "none", traumaDescription: "" },
-        { name: "Дамиан", status: "alpha", scent: { primary: "wood" }, cycle: { active: true, type: "rut", startDate: "2026-07-20" }, trauma: "severe", traumaDescription: "Склонен к жестокости из-за предательства стаи" }
-    ],
-    memoryFacts: [
-        { text: "Дамиан бурно среагировал на запах ванили в коридоре.", category: "Биология", date: "2026-07-13" }
-    ]
-};
-
-// ============================================================
-// 3. УТИЛИТЫ СОХРАНЕНИЯ И ПОИСКА
-// ============================================================
-const save = () => localStorage.setItem('ov_dynamics_monolith_state', JSON.stringify(state));
-const load = () => {
-    const saved = localStorage.getItem('ov_dynamics_monolith_state');
-    if (saved) {
-        try { state = JSON.parse(saved); } catch (e) { console.error("Ошибка загрузки Omegaverse:", e); }
+    npcs: [],
+    promptInterval: 5,
+    currentMessageCount: 0,
+    showFloating: true,
+    promptWeight: '0.5',
+    autoDetect: {
+        detectNewNpc: true,
+        detectStatus: true,
+        detectCycle: true,
+        detectScent: true,
+        detectMark: true,
+        detectBond: true
     }
 };
 
-const getScentsByStatus = (status) => SCENTS.filter(s => s.statuses.includes(status));
-const getScentById = (id) => SCENTS.find(s => s.id === id);
-const getMonthName = (m) => ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][m];
-
-// Изменение месяца в календаре
-function changeCalendarMonth(direction) {
-    const parts = state.calendar.viewDate.split('-');
-    let year = parseInt(parts[0]);
-    let month = parseInt(parts[1]) - 1;
-
-    month += direction;
-    if (month < 0) { month = 11; year--; }
-    if (month > 11) { month = 0; year++; }
-
-    state.calendar.viewDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    save();
-    updateUI();
+// ============================================================
+// 3. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================================
+function getScentById(scentId) {
+    for (const cat in SCENT_CATEGORIES) {
+        const found = SCENT_CATEGORIES[cat].scents.find(s => s.id === scentId);
+        if (found) return found;
+    }
+    return null;
 }
 
-// Показ событий конкретного дня
-window.ovShowDayEvents = function(dateStr) {
-    const eventsContainer = document.getElementById('ov-day-events');
-    if (!eventsContainer) return;
+function save() {
+    localStorage.setItem(extensionName + '-state', JSON.stringify(state));
+}
 
-    let html = ``;
-    const dayEvents = [];
+function load() {
+    const saved = localStorage.getItem(extensionName + '-state');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            state = Object.assign({}, state, parsed);
+            if (!state.autoDetect) {
+                state.autoDetect = {
+                    detectNewNpc: true,
+                    detectStatus: true,
+                    detectCycle: true,
+                    detectScent: true,
+                    detectMark: true,
+                    detectBond: true
+                };
+            }
+        } catch (e) {
+            console.error('[' + extensionName + '] Ошибка загрузки:', e);
+        }
+    }
+}
 
+function notify(text, type = 'system', icon = 'fa-solid fa-info-circle') {
+    toastr.info(`<i class="${icon}"></i> ${text}`, 'Omegaverse');
+}
+
+// ============================================================
+// 4. ЛОГИКА ОМЕГАВЕРСА И ПОРЯДОК СОРТИРОВКИ ФАКТОВ
+// ============================================================
+function getStatusLabel(status) {
+    const map = { 'alpha': 'Альфа', 'beta': 'Бета', 'omega': 'Омега', 'enigma': 'Энигма' };
+    return map[status] || 'Неизвестно';
+}
+
+function getCycleLabel(type) {
+    const map = { 'none': 'Нет', 'heat': 'Течка', 'rut': 'Гон' };
+    return map[type] || 'Нет';
+}
+
+function addFact(npc, key, text) {
+    if (!npc.log) npc.log = [];
+    npc.log = npc.log.filter(f => f.key !== key);
+    npc.log.push({
+        id: Date.now() + Math.random().toString(36).substr(2, 5),
+        key: key,
+        text: text,
+        timestamp: new Date().toLocaleString()
+    });
+}
+
+function generateSystemPrompt() {
+    if (!state.npcs || state.npcs.length === 0) return '';
+    let prompt = `\n[WORLD INFO: OMEGAVERSE SYSTEM ACTIVE]\n`;
     state.npcs.forEach(npc => {
-        if (npc.cycle.active && npc.cycle.startDate === dateStr) {
-            dayEvents.push(`<div style="margin-bottom:6px;">🔥 <b>${npc.name}</b>: Начался период <b>${npc.cycle.type === 'heat' ? 'Течки' : 'Гона'}</b></div>`);
+        let statusText = getStatusLabel(npc.status);
+        if (npc.fakeStatus) {
+            statusText += ` (скрывается под видом: ${getStatusLabel(npc.fakeStatus)})`;
+        }
+        let npcPrompt = `- ${npc.name}: Вторичный пол = ${statusText}.`;
+        if (npc.role && npc.role !== 'none') {
+            npcPrompt += ` Роль в иерархии: ${npc.role}.`;
+        }
+        let scents = [];
+        if (npc.scent.primary) {
+            const s = getScentById(npc.scent.primary);
+            scents.push(`основной: ${s ? s.name : npc.scent.primary}`);
+        }
+        if (npc.scent.secondary) scents.push(`второстепенный: ${npc.scent.secondary}`);
+        if (npc.scent.nuance) scents.push(`нюанс: ${npc.scent.nuance}`);
+        if (npc.scent.territory) scents.push(`территориальный: ${npc.scent.territory}`);
+        if (scents.length > 0) {
+            npcPrompt += ` Запах (${scents.join(', ')}).`;
+        }
+        if (npc.cycle && npc.cycle.type !== 'none' && npc.cycle.active) {
+            npcPrompt += ` Текущее состояние цикла: ${getCycleLabel(npc.cycle.type)}!`;
+        }
+        if (npc.mark && npc.mark.has) {
+            npcPrompt += ` Имеет метку (Владелец: ${npc.mark.owner || 'неизвестен'}, Цель: ${npc.mark.target || 'неизвестна'}).`;
+        }
+        if (npc.bond && npc.bond.has) {
+            npcPrompt += ` Связан истинной связью (Партнёр: ${npc.bond.partner || 'неизвестен'}).`;
+        }
+        if (npc.trauma && npc.trauma !== 'none') {
+            npcPrompt += ` Психологическая травма: ${npc.trauma === 'broken_bond' ? 'Разрыв связи' : 'Выгорание запаха'}. Описание: ${npc.traumaDescription || 'Нет подробностей'}.`;
+        }
+        if (npc.log && npc.log.length > 0) {
+            npcPrompt += ` Зафиксированные факты изменений:`;
+            npc.log.forEach(f => {
+                npcPrompt += ` [${f.timestamp}] ${f.text};`;
+            });
+        }
+        prompt += npcPrompt + `\n`;
+    });
+    return prompt;
+}
+
+function applyOmegaversePrompt() {
+    const promptContent = generateSystemPrompt();
+    if (!promptContent.trim()) {
+        setExtensionPrompt(extensionName, '', extension_prompt_types.IN_CHAT, state.promptWeight);
+        return;
+    }
+    setExtensionPrompt(extensionName, promptContent, extension_prompt_types.IN_CHAT, state.promptWeight);
+}
+
+// ============================================================
+// 5. УПРАВЛЕНИЕ ПЕРСОНАЖАМИ И ИХ СОЗДАНИЕ
+// ============================================================
+function addNpc(name) {
+    const newNpc = {
+        name: name,
+        status: 'beta',
+        fakeStatus: null,
+        role: 'none',
+        scent: { primary: null, secondary: null, nuance: null, territory: null },
+        cycle: { type: 'none', duration: 5, interval: 28, nextDate: null, active: false },
+        mark: { has: false, owner: null, target: null },
+        bond: { has: false, partner: null },
+        interests: { romantic: [], sexual: [] },
+        log: [],
+        avatar: '',
+        trauma: 'none', // ИСПРАВЛЕНО: дублирование lastUpdate убрано
+        traumaDescription: '',
+        lastUpdate: Date.now()
+    };
+    state.npcs.push(newNpc);
+    save();
+    notify(`NPC "${name}" добавлен`, 'system', 'fa-solid fa-user-plus');
+    updateUI();
+    renderAllPanels();
+}
+
+function removeNpc(index) {
+    if (index >= 0 && index < state.npcs.length) {
+        const name = state.npcs[index].name;
+        state.npcs.splice(index, 1);
+        save();
+        notify(`NPC "${name}" удалён`, 'system', 'fa-solid fa-user-minus');
+        updateUI();
+        renderAllPanels();
+    }
+}
+
+// ============================================================
+// 6. АВТОМАТИЧЕСКИЙ ПАРСИНГ И АНАЛИЗ ТЕКСТА (LLM-Детекция)
+// ============================================================
+function parseMessageForOmegaverse(text, sender) {
+    console.log('[OV Debug] Начинаем парсинг текста от:', sender);
+    const rules = [];
+    if (state.autoDetect.detectNewNpc) {
+        rules.push("Если в тексте появляется или активно упоминается новый персонаж, которого нет в списке, укажи его имя в 'newNpc'. Также попробуй сразу определить его пол ('alpha', 'beta', 'omega', 'enigma'). Если персонаж уже есть в списке — поле 'newNpc' должно быть строго null.");
+    }
+    if (state.autoDetect.detectStatus) {
+        rules.push("Определи вторичный пол персонажа (из контекста или если он изменился/раскрылся): 'alpha', 'beta', 'omega', 'enigma'. Запиши в 'status'. Если нет явных указаний, оставь null.");
+    }
+    if (state.autoDetect.detectCycle) {
+        rules.push("Определи, начался ли у персонажа гон или течка. Возможные значения для 'cycle': 'heat' (течка), 'rut' (гон), 'none' (завершился или отсутствует). Если упоминания нет, верни null.");
+    }
+    if (state.autoDetect.detectScent) {
+        rules.push("Определи базовый запах персонажа. Выбери наиболее подходящий строгий ID запаха из доступного списка: " +
+            Object.keys(SCENT_CATEGORIES).map(c => SCENT_CATEGORIES[c].scents.map(s => s.id).join(', ')).join(', ') +
+            ". Если запах уникальный и его нет в списке, запиши его строкой (например, 'лаванда'). Если упоминания запаха нет, верни null.");
+    }
+    if (state.autoDetect.detectMark) {
+        rules.push("Определи, была ли поставлена метка (укус в шею) в этом сообщении. Если да, установи 'mark' в true, иначе null.");
+    }
+    if (state.autoDetect.detectBond) {
+        rules.push("Определи, сформировалась ли истинная связь между персонажами в этом сообщении. Если да, установи 'bond' в true, иначе null.");
+    }
+
+    if (rules.length === 0) return;
+
+    const systemInstruction = `Ты — вспомогательный модуль анализа скрытой динамики мира (Омегаверс). Твоя задача — проанализировать последнее сообщение и вернуть СТРОГИЙ JSON объект с изменениями.
+Правила анализа:
+${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+ВАЖНО: Поле 'newNpc' должно содержать имя персонажа ТОЛЬКО если это абсолютно новый персонаж, которого нужно добавить в систему. Если речь идет о персонаже, который уже существует, или о действиях главного героя/собеседника, имя которого уже известно системе, поле 'newNpc' должно быть null, а все остальные изменения (status, cycle, scent) должны относиться к этому существующему персонажу (в этом случае логика скрипта автоматически свяжет изменения по контексту, но ты должен вернуть 'newNpc': null, а имя существующего персонажа, если необходимо для привязки изменений, можешь не указывать, скрипт привяжет к текущему говорящему боту). Стоп, давай сделаем проще: если персонаж уже существует, укажи его имя в 'newNpc', чтобы скрипт знал, КОМУ обновлять параметры, но скрипт проверит, если он есть — он просто обновит параметры, а не создаст дубликат! Да, точно: 'newNpc' должен ВСЕГДА содержать имя персонажа, у которого зафиксированы изменения.
+
+Возвращай ТОЛЬКО чистый JSON объект следующего вида (без markdown, без \`\`\`json):
+{
+  "newNpc": "Имя Персонажа или null",
+  "status": "alpha/beta/omega/enigma или null",
+  "cycle": "heat/rut/none или null",
+  "scent": "ID запаха или строка или null",
+  "mark": true/null,
+  "bond": true/null
+}`;
+
+    const context = SillyTavern.getContext();
+    const chat = context.chat;
+    const lastMessages = chat.slice(-3).map(m => `${m.name}: ${m.mes}`).join('\n\n');
+
+    console.log('[OV Debug] Отправляем запрос в LLM для детекции изменений...');
+    SillyTavern.requestGenericCompletion(systemInstruction, lastMessages)
+        .then(response => {
+            console.log('[OV Debug] Получен ответ от LLM:', response);
+            try {
+                const cleaned = response.replace(/```json/g, '').replace(/```/g, '').trim();
+                const detected = JSON.parse(cleaned);
+                if (detected && detected.newNpc) {
+                    applyDetectedChanges(detected);
+                }
+            } catch (err) {
+                console.error('[OV Детектор] Не удалось распарсить JSON ответ:', err, response);
+            }
+        })
+        .catch(err => {
+            console.error('[OV Детектор] Ошибка генерации запроса:', err);
+        });
+}
+
+function applyDetectedChanges(detected) {
+    let hasChanged = false;
+    let npc = null;
+
+    // 1. Поиск или создание NPC
+    if (detected.newNpc) {
+        npc = state.npcs.find(n => n.name.toLowerCase() === detected.newNpc.toLowerCase());
+        
+        if (!npc && state.autoDetect.detectNewNpc) {
+            npc = {
+                name: detected.newNpc,
+                status: detected.status || 'beta',
+                fakeStatus: null,
+                role: 'none',
+                scent: { primary: detected.scent || null, secondary: null, nuance: null, territory: null },
+                cycle: { type: detected.cycle || 'none', duration: 5, interval: 28, nextDate: null, active: false },
+                mark: { has: false, owner: null, target: null },
+                bond: { has: false, partner: null },
+                interests: { romantic: [], sexual: [] },
+                log: [],
+                avatar: '',
+                trauma: 'none',
+                traumaDescription: '',
+                lastUpdate: Date.now()
+            };
+            state.npcs.push(npc);
+            notify(`Обнаружен новый персонаж: ${detected.newNpc} (${getStatusLabel(npc.status)})`, 'system', 'fa-solid fa-user-plus');
+            
+            // Запись факта создания вынесена из цикла
+            addFact(npc, 'creation', `Персонаж автоматически добавлен в систему со статусом "${getStatusLabel(npc.status)}"`);
+            hasChanged = true;
+        }
+    }
+
+    if (!npc) return; // Если персонажа нет и создать не удалось, выходим
+
+    // 2. Изменение статуса (у существующего персонажа)
+    if (detected.status && state.autoDetect.detectStatus && npc.status !== detected.status) {
+        npc.status = detected.status;
+        npc.lastUpdate = Date.now();
+        notify(`Статус ${npc.name} обновлён: ${getStatusLabel(detected.status)}`, 'system', 'fa-solid fa-rotate');
+        addFact(npc, 'status_change', `Динамически изменён вторичный пол на "${getStatusLabel(detected.status)}"`);
+        hasChanged = true;
+    }
+
+    // 3. Изменение цикла (течка / гон)
+    if (detected.cycle && state.autoDetect.detectCycle && npc.cycle.type !== detected.cycle) {
+        const cycleType = detected.cycle;
+        npc.cycle.type = cycleType;
+        
+        if (cycleType !== 'none') {
+            npc.cycle.active = true;
+            npc.cycle.startDate = new Date().toISOString().split('T')[0];
+            const start = new Date(npc.cycle.startDate);
+            start.setDate(start.getDate() + (npc.cycle.interval || 28));
+            npc.cycle.nextDate = start.toISOString().split('T')[0];
+            notify(`У ${npc.name} начался ${cycleType === 'heat' ? 'течка' : 'гон'}`, 'system', 'fa-solid fa-fire');
+            addFact(npc, 'cycle_start', `Зафиксировано начало биологического цикла: ${getCycleLabel(cycleType)}`);
+        } else {
+            npc.cycle.active = false;
+            npc.cycle.nextDate = null;
+            notify(`У ${npc.name} завершился активный цикл`, 'system', 'fa-solid fa-ice-cream');
+            addFact(npc, 'cycle_end', `Биологический цикл (течка/гон) успешно завершён`);
+        }
+        npc.lastUpdate = Date.now();
+        hasChanged = true;
+    }
+
+    // 4. Изменение запаха
+    if (detected.scent && state.autoDetect.detectScent && npc.scent.primary !== detected.scent) {
+        npc.scent.primary = detected.scent;
+        npc.lastUpdate = Date.now();
+        const scentObj = getScentById(detected.scent);
+        const scentName = scentObj ? scentObj.name : detected.scent;
+        notify(`У ${npc.name} обнаружен запах: ${scentName}`, 'system', 'fa-solid fa-wand-sparkles');
+        addFact(npc, 'scent_detect', `Впервые зафиксирован или изменён аромат: ${scentName}`);
+        hasChanged = true;
+    }
+
+    // 5. Появление метки
+    if (detected.mark && state.autoDetect.detectMark && !npc.mark.has) {
+        npc.mark.has = true;
+        npc.lastUpdate = Date.now();
+        notify(`${npc.name} получил метку!`, 'system', 'fa-solid fa-link');
+        addFact(npc, 'mark_gained', `На персонажа была поставлена постоянная метка укуса`);
+        hasChanged = true;
+    }
+
+    // 6. Установление связи (Бонд)
+    if (detected.bond && state.autoDetect.detectBond && !npc.bond.has) {
+        npc.bond.has = true;
+        npc.lastUpdate = Date.now();
+        notify(`${npc.name} установил истинную связь!`, 'system', 'fa-solid fa-heart-pulse');
+        addFact(npc, 'bond_formed', `Сформирована неразрывная истинная связь между партнёрами`);
+        hasChanged = true;
+    }
+
+    // ИСПРАВЛЕНО: Дублирующиеся блоки addFact() удалены. Все сохранения и обновления UI происходят один раз в конце функции.
+    if (hasChanged) {
+        save();
+        updateUI();
+        renderAllPanels();
+        applyOmegaversePrompt();
+    }
+}
+
+// ============================================================
+// 7. ИНТЕРФЕЙС УПРАВЛЕНИЯ И НАСТРОЕК (UI)
+// ============================================================
+function updateUI() {
+    applyOmegaversePrompt();
+}
+
+function renderAllPanels() {
+    renderNpcListContent();
+    renderConfigPanelContent();
+}
+
+function renderNpcListContent() {
+    const container = $('#ov-npc-items');
+    if (!container.length) return;
+    container.empty();
+
+    if (state.npcs.length === 0) {
+        container.append('<div class="ov-empty-notice">Список пуст. Добавьте персонажа выше или включите автодетекцию в настройках.</div>');
+        return;
+    }
+
+    state.npcs.forEach((npc, index) => {
+        let scents = [];
+        if (npc.scent.primary) {
+            const s = getScentById(npc.scent.primary);
+            scents.push(s ? s.name : npc.scent.primary);
+        }
+        if (npc.scent.secondary) scents.push(npc.scent.secondary);
+        const scentText = scents.length > 0 ? scents.join(' + ') : 'Не определен';
+
+        let cycleStatus = getCycleLabel(npc.cycle.type);
+        if (npc.cycle.active && npc.cycle.type !== 'none') {
+            cycleStatus += ' (Активен)';
+        }
+
+        const html = `
+            <div class="ov-npc-card" data-index="${index}">
+                <div class="ov-card-header">
+                    <span class="ov-card-title">${npc.name}</span>
+                    <button class="ov-delete-btn" data-index="${index}" title="Удалить"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+                <div class="ov-card-grid">
+                    <div><strong>Пол:</strong> <span class="ov-badge ${npc.status}">${getStatusLabel(npc.status)}</span></div>
+                    <div><strong>Цикл:</strong> <span class="ov-badge-cycle ${npc.cycle.active ? 'active' : ''}">${cycleStatus}</span></div>
+                    <div class="ov-fullwidth"><strong>Запах:</strong> <span>${scentText}</span></div>
+                    <div><strong>Метка:</strong> <span>${npc.mark.has ? 'Есть' : 'Нет'}</span></div>
+                    <div><strong>Связь:</strong> <span>${npc.bond.has ? 'Есть' : 'Нет'}</span></div>
+                </div>
+                
+                <div class="ov-trauma-section">
+                    <label>Травма:</label>
+                    <select class="ov-trauma-select" data-index="${index}">
+                        <option value="none" ${npc.trauma === 'none' ? 'selected' : ''}>Нет</option>
+                        <option value="broken_bond" ${npc.trauma === 'broken_bond' ? 'selected' : ''}>Разрыв связи</option>
+                        <option value="scent_burnout" ${npc.trauma === 'scent_burnout' ? 'selected' : ''}>Выгорание запаха</option>
+                    </select>
+                    <input type="text" class="ov-trauma-desc" data-index="${index}" placeholder="Описание травмы..." value="${npc.traumaDescription || ''}">
+                </div>
+
+                <div class="ov-card-actions">
+                    <button class="ov-edit-btn" data-index="${index}"><i class="fa-solid fa-user-gear"></i> Изменить</button>
+                </div>
+            </div>
+        `;
+        container.append(html);
+    });
+}
+
+function openEditModal(index) {
+    const npc = state.npcs[index];
+    if (!npc) return;
+
+    let scentOptions = '<option value="">-- Выберите запах --</option>';
+    for (const cat in SCENT_CATEGORIES) {
+        scentOptions += `<optgroup label="${SCENT_CATEGORIES[cat].name}">`;
+        SCENT_CATEGORIES[cat].scents.forEach(s => {
+            scentOptions += `<option value="${s.id}" ${npc.scent.primary === s.id ? 'selected' : ''}>${s.name}</option>`;
+        });
+        scentOptions += `</optgroup>`;
+    }
+
+    const modalHtml = `
+        <div id="ov-modal-overlay" class="ov-modal-overlay">
+            <div class="ov-modal-content">
+                <h3>Редактирование: ${npc.name}</h3>
+                
+                <div class="ov-field-group">
+                    <label>Вторичный пол:</label>
+                    <select id="modal-status">
+                        <option value="alpha" ${npc.status === 'alpha' ? 'selected' : ''}>Альфа</option>
+                        <option value="beta" ${npc.status === 'beta' ? 'selected' : ''}>Бета</option>
+                        <option value="omega" ${npc.status === 'omega' ? 'selected' : ''}>Омега</option>
+                        <option value="enigma" ${npc.status === 'enigma' ? 'selected' : ''}>Энигма</option>
+                    </select>
+                </div>
+
+                <div class="ov-field-group">
+                    <label>Основной запах:</label>
+                    <select id="modal-scent-primary">${scentOptions}</select>
+                </div>
+
+                <div class="ov-field-group">
+                    <label>Состояние цикла:</label>
+                    <select id="modal-cycle-type">
+                        <option value="none" ${npc.cycle.type === 'none' ? 'selected' : ''}>Нет</option>
+                        <option value="heat" ${npc.cycle.type === 'heat' ? 'selected' : ''}>Течка</option>
+                        <option value="rut" ${npc.cycle.type === 'rut' ? 'selected' : ''}>Гон</option>
+                    </select>
+                </div>
+
+                <div class="ov-checkbox-group">
+                    <label><input type="checkbox" id="modal-mark" ${npc.mark.has ? 'checked' : ''}> Наличие метки</label>
+                    <label><input type="checkbox" id="modal-bond" ${npc.bond.has ? 'checked' : ''}> Наличие связи</label>
+                </div>
+
+                <div class="ov-modal-buttons">
+                    <button id="ov-modal-save" class="menu_button save_btn">Сохранить</button>
+                    <button id="ov-modal-close" class="menu_button">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    $('body').append(modalHtml);
+
+    $('#ov-modal-close, #ov-modal-overlay').on('click', function(e) {
+        if (e.target === this) $('#ov-modal-overlay').remove();
+    });
+
+    $('#ov-modal-save').on('click', function() {
+        npc.status = $('#modal-status').val();
+        npc.scent.primary = $('#modal-scent-primary').val();
+        npc.cycle.type = $('#modal-cycle-type').val();
+        npc.cycle.active = npc.cycle.type !== 'none';
+        npc.mark.has = $('#modal-mark').is(':checked');
+        npc.bond.has = $('#modal-bond').is(':checked');
+        npc.lastUpdate = Date.now();
+
+        save();
+        $('#ov-modal-overlay').remove();
+        notify(`Параметры ${npc.name} успешно изменены`, 'system', 'fa-solid fa-user-check');
+        renderAllPanels();
+        updateUI();
+    });
+}
+
+function renderConfigPanelContent() {
+    const configContainer = $('#ov-config-options');
+    if (!configContainer.length) return;
+    configContainer.empty();
+
+    const html = `
+        <div class="ov-settings-block">
+            <h4>Глобальные настройки</h4>
+            <div class="ov-field-group">
+                <label>Интервал подмешивания системного промпта (в сообщениях):</label>
+                <input type="number" id="ov-cfg-interval" value="${state.promptInterval}" min="1" max="50">
+            </div>
+            <div class="ov-field-group">
+                <label>Сила (вес) влияния промпта:</label>
+                <select id="ov-cfg-weight">
+                    <option value="0.1" ${state.promptWeight === '0.1' ? 'selected' : ''}>0.1 (Минимальный)</option>
+                    <option value="0.3" ${state.promptWeight === '0.3' ? 'selected' : ''}>0.3 (Слабый)</option>
+                    <option value="0.5" ${state.promptWeight === '0.5' ? 'selected' : ''}>0.5 (Средний)</option>
+                    <option value="0.8" ${state.promptWeight === '0.8' ? 'selected' : ''}>0.8 (Сильный)</option>
+                    <option value="1.0" ${state.promptWeight === '1.0' ? 'selected' : ''}>1.0 (Абсолютный)</option>
+                </select>
+            </div>
+            <div class="ov-checkbox-group">
+                <label><input type="checkbox" id="ov-cfg-floating" ${state.showFloating ? 'checked' : ''}> Показывать плавающую кнопку быстрого доступа</label>
+            </div>
+        </div>
+
+        <div class="ov-settings-block" style="margin-top: 15px;">
+            <h4>Автоматическая LLM детекция (Нейро-сканирование)</h4>
+            <div class="ov-checkbox-grid">
+                <label><input type="checkbox" id="ov-det-npc" ${state.autoDetect.detectNewNpc ? 'checked' : ''}> Нахождение новых персонажей</label>
+                <label><input type="checkbox" id="ov-det-status" ${state.autoDetect.detectStatus ? 'checked' : ''}> Распознавание вторичного пола</label>
+                <label><input type="checkbox" id="ov-det-cycle" ${state.autoDetect.detectCycle ? 'checked' : ''}> Изменения циклов (течка/гон)</label>
+                <label><input type="checkbox" id="ov-det-scent" ${state.autoDetect.detectScent ? 'checked' : ''}> Определение новых запахов</label>
+                <label><input type="checkbox" id="ov-det-mark" ${state.autoDetect.detectMark ? 'checked' : ''}> Детекция узлов и укусов меток</label>
+                <label><input type="checkbox" id="ov-det-bond" ${state.autoDetect.detectBond ? 'checked' : ''}> Определение истинных связей</label>
+            </div>
+        </div>
+    `;
+    configContainer.append(html);
+}
+
+// ============================================================
+// 8. ИНИЦИАЛИЗАЦИЯ И ИНТЕГРАЦИЯ В SILLYTAVERN
+// ============================================================
+jQuery(() => {
+    load();
+
+    const panelHtml = `
+        <div id="omegaverse-dynamics-panel" class="ov-main-panel shadow-v2">
+            <div class="ov-panel-header">
+                <h3><i class="fa-solid fa-dna"></i> Модуль Динамики Омегаверса</h3>
+                <span id="ov-close-btn" class="ov-close-btn">&times;</span>
+            </div>
+            <div class="ov-tabs">
+                <button class="ov-tab-btn active" data-tab="npcs"><i class="fa-solid fa-users"></i> Персонажи</button>
+                <button class="ov-tab-btn" data-tab="config"><i class="fa-solid fa-sliders"></i> Настройки</button>
+            </div>
+            
+            <div class="ov-tab-content active" id="ov-tab-npcs">
+                <div class="ov-add-npc-bar">
+                    <input type="text" id="ov-new-npc-name" placeholder="Имя нового персонажа...">
+                    <button id="ov-add-npc-btn" class="menu_button"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="ov-npc-items" class="ov-scroll-container"></div>
+            </div>
+
+            <div class="ov-tab-content" id="ov-tab-config">
+                <div id="ov-config-options" class="ov-scroll-container"></div>
+                <div class="ov-panel-footer-actions">
+                    <button id="ov-import-btn" class="menu_button"><i class="fa-solid fa-file-import"></i> Импорт</button>
+                    <button id="ov-export-btn" class="menu_button"><i class="fa-solid fa-file-export"></i> Экспорт</button>
+                </div>
+            </div>
+        </div>
+        <div id="ov-mini-btn" class="ov-floating-icon shadow-v2" title="Открыть Омегаверс модуль" style="display:none;">
+            <i class="fa-solid fa-dna"></i>
+        </div>
+    `;
+
+    $('body').append(panelHtml);
+
+    // Добавление стилей модуля
+    const styles = `
+        .ov-main-panel { position: fixed; top: 80px; right: 20px; width: 380px; max-height: 80vh; background: var(--nav-bar-bg, #222); border: 1px solid var(--borderColor, #444); border-radius: 8px; z-index: 9999; display: none; flex-direction: column; color: var(--text-color, #fff); font-family: sans-serif; }
+        .ov-panel-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: rgba(0,0,0,0.2); border-bottom: 1px solid var(--borderColor, #444); }
+        .ov-panel-header h3 { margin: 0; font-size: 15px; color: #ff5e97; display: flex; align-items: center; gap: 8px; }
+        .ov-close-btn { cursor: pointer; font-size: 20px; line-height: 20px; }
+        .ov-tabs { display: flex; border-bottom: 1px solid var(--borderColor, #444); background: rgba(0,0,0,0.1); }
+        .ov-tab-btn { flex: 1; padding: 8px; background: none; border: none; color: var(--text-color, #ccc); cursor: pointer; text-align: center; font-size: 13px; }
+        .ov-tab-btn.active { background: rgba(255, 94, 151, 0.15); color: #ff5e97; font-weight: bold; border-bottom: 2px solid #ff5e97; }
+        .ov-tab-content { display: none; padding: 15px; flex-direction: column; overflow: hidden; }
+        .ov-tab-content.active { display: flex; }
+        .ov-scroll-container { max-height: 50vh; overflow-y: auto; padding-right: 5px; margin-top: 10px; }
+        .ov-add-npc-bar { display: flex; gap: 8px; }
+        .ov-add-npc-bar input { flex: 1; padding: 6px; background: var(--input-bg, #111); border: 1px solid var(--borderColor, #444); border-radius: 4px; color: #fff; }
+        .ov-npc-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 12px; margin-bottom: 10px; position: relative; }
+        .ov-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 4px; }
+        .ov-card-title { font-weight: bold; font-size: 14px; color: #ffbc42; }
+        .ov-delete-btn { background: none; border: none; color: #ff4a4a; cursor: pointer; font-size: 13px; }
+        .ov-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; }
+        .ov-fullwidth { grid-column: span 2; }
+        .ov-badge { padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10px; text-transform: uppercase; }
+        .ov-badge.alpha { background: #ff4136; color: #fff; }
+        .ov-badge.omega { background: #0074d9; color: #fff; }
+        .ov-badge.beta { background: #aaaaaa; color: #000; }
+        .ov-badge.enigma { background: #b10dc9; color: #fff; }
+        .ov-badge-cycle { padding: 2px 6px; border-radius: 4px; font-size: 11px; background: rgba(255,255,255,0.1); }
+        .ov-badge-cycle.active { background: #ff851b; color: #000; font-weight: bold; animation: pulse 2s infinite; }
+        .ov-card-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+        .ov-edit-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .ov-edit-btn:hover { background: rgba(255,255,255,0.2); }
+        .ov-floating-icon { position: fixed; bottom: 80px; right: 20px; width: 45px; height: 45px; background: #ff5e97; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 9998; color: #fff; font-size: 20px; }
+        .ov-settings-block h4 { margin: 0 0 8px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 3px; color: #4ecdc4; }
+        .ov-field-group { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+        .ov-field-group input, .ov-field-group select { padding: 5px; background: var(--input-bg, #111); border: 1px solid var(--borderColor, #444); border-radius: 4px; color: #fff; }
+        .ov-checkbox-group, .ov-checkbox-grid { font-size: 12px; display: flex; flex-direction: column; gap: 5px; }
+        .ov-checkbox-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+        .ov-empty-notice { text-align: center; font-size: 12px; color: #888; padding: 20px 10px; }
+        .ov-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 10000; display: flex; justify-content: center; align-items: center; }
+        .ov-modal-content { background: var(--nav-bar-bg, #222); border: 1px solid var(--borderColor, #444); border-radius: 8px; padding: 20px; width: 320px; display: flex; flex-direction: column; gap: 12px; color: #fff; }
+        .ov-modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+        .ov-panel-footer-actions { margin-top: 15px; display: flex; gap: 10px; }
+        .ov-panel-footer-actions button { flex: 1; font-size: 12px; padding: 6px; }
+        .ov-trauma-section { margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+        .ov-trauma-select { padding: 3px; background: #111; border: 1px solid #444; border-radius: 4px; color: #fff; }
+        .ov-trauma-desc { padding: 4px; background: #111; border: 1px solid #444; border-radius: 4px; color: #fff; }
+        @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+    `;
+    $('head').append(`<style>${styles}</style>`);
+
+    // Кнопка в верхней панели СиллиТаверн (ST Third-party extension icon entry)
+    const topBarButton = $(`<div class="ov-topbar-icon extensionsMenuExtensionButton" title="Динамика Омегаверса"><i class="fa-solid fa-dna"></i></div>`);
+    $('#extensionsMenu').append(topBarButton);
+
+    const togglePanel = () => {
+        const p = $('#omegaverse-dynamics-panel');
+        if (p.is(':visible')) {
+            p.fadeOut(150);
+        } else {
+            renderAllPanels();
+            p.fadeIn(150);
+        }
+    };
+
+    topBarButton.on('click', togglePanel);
+    $('#ov-mini-btn').on('click', togglePanel);
+    $('#ov-close-btn').on('click', () => $('#omegaverse-dynamics-panel').fadeOut(150));
+
+    // Переключение вкладок
+    $('.ov-tab-btn').on('click', function() {
+        $('.ov-tab-btn').removeClass('active');
+        $(this).addClass('active');
+        const tab = $(this).data('tab');
+        $('.ov-tab-content').removeClass('active');
+        $(`#ov-tab-${tab}`).addClass('active');
+    });
+
+    // Обработчики добавления и удаления
+    $('#ov-add-npc-btn').on('click', () => {
+        const nameInput = $('#ov-new-npc-name');
+        const name = nameInput.val().trim();
+        if (name) {
+            addNpc(name);
+            nameInput.val('');
         }
     });
 
-    if (dayEvents.length === 0) {
-        html = `<div class="ov-text-muted">Нет биологических событий на ${dateStr}</div>`;
-    } else {
-        html = `<div><b>Дата: ${dateStr}</b></div><hr style="border-color:rgba(255,255,255,0.1); margin:8px 0;">` + dayEvents.join('');
-    }
-    eventsContainer.innerHTML = html;
-};
-
-// ============================================================
-// 4. ГЕНЕРАЦИЯ ШАБЛОНОВ ДЛЯ ВКЛАДОК
-// ============================================================
-
-// --- ВКЛАДКА: ИГРОК ---
-function getPlayerTabHTML() {
-    const p = state.player;
-    let scentOptions = `<option value="">Без запаха</option>`;
-    getScentsByStatus(p.status).forEach(s => {
-        scentOptions += `<option value="${s.id}" ${p.scent.primary === s.id ? 'selected' : ''}>${s.name}</option>`;
+    $(document).on('click', '.ov-delete-btn', function(e) {
+        e.stopPropagation();
+        const idx = $(this).data('index');
+        removeNpc(idx);
     });
 
-    return `
-        <div class="ov-card">
-            <div class="ov-section-title">Персональные биологические данные</div>
-            <div class="ov-row">
-                <label>Ваш статус:</label>
-                <select id="ov-p-status" class="ov-select">
-                    <option value="alpha" ${p.status === 'alpha' ? 'selected' : ''}>Альфа ⚡</option>
-                    <option value="beta" ${p.status === 'beta' ? 'selected' : ''}>Бета 👥</option>
-                    <option value="omega" ${p.status === 'omega' ? 'selected' : ''}>Омега 🌸</option>
-                </select>
-            </div>
-            <div class="ov-row">
-                <label>Природный аромат:</label>
-                <select id="ov-p-scent" class="ov-select">${scentOptions}</select>
-            </div>
-            <div class="ov-row">
-                <label>Социальная роль:</label>
-                <input type="text" id="ov-p-role" class="ov-input ov-flex" value="${p.role || ''}" placeholder="Например: Глава клана...">
-            </div>
-            <div class="ov-row" style="margin-top:15px;">
-                <label style="cursor:pointer;">
-                    <input type="checkbox" id="ov-p-cycle" ${p.cycle.active ? 'checked' : ''}> Текущее состояние цикла (Гон / Течка)
-                </label>
-            </div>
-        </div>
-    `;
-}
-
-// --- ВКЛАДКА: NPC ---
-function getNpcsTabHTML() {
-    if (state.npcs.length === 0) return `<div class="ov-text-muted">Список пуст. Персонажи появятся после детекта в чате.</div>`;
-    
-    let html = `<div style="display:flex; flex-direction:column; gap:12px;">`;
-    state.npcs.forEach((npc, index) => {
-        const scentObj = getScentById(npc.scent.primary);
-        let badge = npc.status === 'alpha' ? 'ov-status-alpha' : (npc.status === 'omega' ? 'ov-status-omega' : 'ov-status-beta');
-        
-        html += `
-            <div class="ov-card">
-                <div class="ov-row" style="border-bottom: 1px solid var(--ov-border); padding-bottom:8px; margin-bottom:10px;">
-                    <b style="font-size:15px;">${npc.name}</b>
-                    <span class="ov-status-badge ${badge}">${npc.status}</span>
-                </div>
-                <div style="font-size:12px; display:flex; flex-direction:column; gap:6px;">
-                    <div><b>Запах:</b> ${scentObj ? scentObj.name : 'Не определён'}</div>
-                    <div><b>Состояние:</b> ${npc.cycle.active ? (npc.status === 'omega' ? 'Течка 🔥' : 'Гон ⚡') : 'Стабилен'}</div>
-                    <div class="ov-row" style="margin-top:5px;">
-                        <label>Психо-травма:</label>
-                        <select class="ov-select ov-npc-trauma" data-index="${index}">
-                            <option value="none" ${npc.trauma === 'none' ? 'selected' : ''}>Нет травм</option>
-                            <option value="light" ${npc.trauma === 'light' ? 'selected' : ''}>Лёгкая (Недоверие)</option>
-                            <option value="severe" ${npc.trauma === 'severe' ? 'selected' : ''}>Тяжёлая (Жестокость)</option>
-                        </select>
-                    </div>
-                    <input type="text" class="ov-input ov-npc-trauma-desc" data-index="${index}" value="${npc.traumaDescription || ''}" placeholder="Проявления травмы в поведении...">
-                </div>
-            </div>
-        `;
-    });
-    html += `</div>`;
-    return html;
-}
-
-// --- ВКЛАДКА: КАЛЕНДАРЬ И ЦИКЛЫ ---
-function getCalendarTabHTML() {
-    let decorEmoji = state.calendar.season === 'spring' ? '🌸' : state.calendar.season === 'summer' ? '🌻' : state.calendar.season === 'autumn' ? '🍁' : '❄️';
-    
-    let html = `
-        <div class="ov-row">
-            <label>Текущее время года:</label>
-            <select class="ov-select ov-flex" id="ov-calendar-season-select">
-                <option value="spring" ${state.calendar.season === 'spring' ? 'selected' : ''}>🌸 Весна</option>
-                <option value="summer" ${state.calendar.season === 'summer' ? 'selected' : ''}>🌻 Лето</option>
-                <option value="autumn" ${state.calendar.season === 'autumn' ? 'selected' : ''}>🍁 Осень</option>
-                <option value="winter" ${state.calendar.season === 'winter' ? 'selected' : ''}>❄️ Зима</option>
-            </select>
-        </div>
-
-        <div class="ov-calendar-beautiful ov-season-${state.calendar.season}">
-            <div class="ov-season-decor">${decorEmoji}</div>
-            <div class="ov-calendar-nav" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <button class="ov-btn" id="ov-cal-prev" style="padding:2px 8px;"><i class="fa-solid fa-chevron-left"></i></button>
-                <span style="font-weight:900;">${getMonthName(new Date(state.calendar.viewDate).getMonth())} ${new Date(state.calendar.viewDate).getFullYear()}</span>
-                <button class="ov-btn" id="ov-cal-next" style="padding:2px 8px;"><i class="fa-solid fa-chevron-right"></i></button>
-            </div>
-            <div class="ov-calendar-grid" style="display:grid; grid-template-columns:repeat(7,1fr); gap:5px; text-align:center; font-size:11px;">
-    `;
-
-    ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].forEach(d => {
-        html += `<div style="font-weight:800; opacity:0.6;">${d}</div>`;
+    $(document).on('click', '.ov-edit-btn', function() {
+        const idx = $(this).data('index');
+        openEditModal(idx);
     });
 
-    const viewDate = new Date(state.calendar.viewDate);
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const todayStr = new Date().toISOString().split('T')[0];
-    let startOffset = (firstDay === 0) ? 6 : firstDay - 1;
-
-    for (let i = 0; i < startOffset; i++) html += `<div></div>`;
-
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        let dayClass = 'ov-cal-day';
-        if (dateStr === todayStr) dayClass += ' cal-today';
-
-        state.npcs.forEach(npc => {
-            if (npc.cycle.active && npc.cycle.startDate === dateStr) {
-                dayClass += npc.cycle.type === 'heat' ? ' event-heat' : ' event-rut';
-            }
-        });
-
-        html += `<div class="${dayClass}" onclick="ovShowDayEvents('${dateStr}')">${day}</div>`;
-    }
-
-    html += `
-            </div>
-        </div>
-        <div class="ov-section-title"><i class="fa-solid fa-list"></i> Биологические события дня</div>
-        <div id="ov-day-events" style="padding:10px; background:rgba(0,0,0,0.2); border-radius:12px; font-size:12px;">
-            <div class="ov-text-muted">Нажмите на подсвеченный день цикла...</div>
-        </div>
-    `;
-    return html;
-}
-
-// --- ВКЛАДКА: ПАМЯТЬ И ЛОГИ ФАКТОВ ---
-function getFactsTabHTML() {
-    let html = `<div class="ov-section-title">Зафиксированные биологические факты</div>`;
-    if (state.memoryFacts.length === 0) return html + `<div class="ov-text-muted">База чиста. Факты генерируются автоматически во время диалогов.</div>`;
-    
-    state.memoryFacts.forEach(f => {
-        html += `
-            <div class="ov-card" style="padding:10px; font-size:12px; margin-bottom:6px;">
-                <span style="color:var(--ov-omega); font-weight:bold;">[${f.category}]</span> ${f.text}
-                <div style="font-size:10px; opacity:0.5; text-align:right; margin-top:4px;">${f.date}</div>
-            </div>
-        `;
-    });
-    return html;
-}
-
-// --- ВКЛАДКА: НАСТРОЙКИ ---
-function getSettingsTabHTML() {
-    return `
-        <div class="ov-card">
-            <div class="ov-row">
-                <label><input type="checkbox" id="ov-opt-enabled" ${state.enabled ? 'checked' : ''}> Активно</label>
-            </div>
-            <div class="ov-row">
-                <label><input type="checkbox" id="ov-opt-auto" ${state.autoDetect ? 'checked' : ''}> Авто-детект статусов</label>
-            </div>
-            <div class="ov-row" style="margin-top:10px;">
-                <label>Частота напоминаний (сообщ.):</label>
-                <input type="number" id="ov-opt-interval" class="ov-input" style="width:60px;" value="${state.promptInterval}" min="1">
-            </div>
-            <button id="ov-btn-reset" class="ov-btn" style="width:100%; margin-top:15px; background:rgba(255,71,87,0.2); color:#ff4757; border-color:rgba(255,71,87,0.3)">Полный сброс расширения</button>
-        </div>
-    `;
-}
-
-// ============================================================
-// 5. ДИНАМИЧЕСКИЙ ОБНОВЛЯЕМЫЙ ИНТЕРФЕЙС
-// ============================================================
-function updateUI() {
-    const panel = document.getElementById('ov-main-panel');
-    if (!panel) return;
-
-    // Подсвечиваем кнопки вкладок
-    panel.querySelectorAll('.ov-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.id === `ov-tab-${state.activeTab}`) btn.classList.add('active');
+    // ИСПРАВЛЕНО (Пункт 4 из вашего списка): Добавление сохранения полей травмы через .ov-edit-btn
+    $(document).on('change', '.ov-trauma-select', function() {
+        const idx = $(this).data('index');
+        if (state.npcs[idx]) {
+            state.npcs[idx].trauma = $(this).val();
+            state.npcs[idx].lastUpdate = Date.now();
+            save();
+            applyOmegaversePrompt();
+        }
     });
 
-    // Рендерим нужный контент
-    const contentArea = panel.querySelector('.ov-content');
-    if (!contentArea) return;
+    $(document).on('input', '.ov-trauma-desc', function() {
+        const idx = $(this).data('index');
+        if (state.npcs[idx]) {
+            state.npcs[idx].traumaDescription = $(this).val();
+            state.npcs[idx].lastUpdate = Date.now();
+            save();
+            applyOmegaversePrompt();
+        }
+    });
 
-    switch (state.activeTab) {
-        case 'player': contentArea.innerHTML = getPlayerTabHTML(); break;
-        case 'npcs': contentArea.innerHTML = getNpcsTabHTML(); break;
-        case 'calendar': contentArea.innerHTML = getCalendarTabHTML(); break;
-        case 'facts': contentArea.innerHTML = getFactsTabHTML(); break;
-        case 'settings': contentArea.innerHTML = getSettingsTabHTML(); break;
-    }
+    // Обработчики изменений глобальных настроек
+    $(document).on('change', '#ov-cfg-interval', function() {
+        state.promptInterval = parseInt($(this).val()) || 5;
+        save();
+    });
 
-    // НАВЕШИВАНИЕ ОБРАБОТЧИКОВ И СОБЫТИЙ ДЛЯ КАЖДОЙ ВКЛАДКИ НАПРЯМУЮ
-    if (state.activeTab === 'player') {
-        document.getElementById('ov-p-status').onchange = (e) => { state.player.status = e.target.value; save(); updateUI(); };
-        document.getElementById('ov-p-scent').onchange = (e) => { state.player.scent.primary = e.target.value; save(); };
-        document.getElementById('ov-p-role').oninput = (e) => { state.player.role = e.target.value; save(); };
-        document.getElementById('ov-p-cycle').onchange = (e) => { state.player.cycle.active = e.target.checked; state.player.cycle.type = state.player.status === 'omega' ? 'heat' : 'rut'; save(); };
-    }
-    if (state.activeTab === 'npcs') {
-        panel.querySelectorAll('.ov-npc-trauma').forEach(select => {
-            select.onchange = (e) => { const idx = e.target.dataset.index; state.npcs[idx].trauma = e.target.value; save(); };
-        });
-        panel.querySelectorAll('.ov-npc-trauma-desc').forEach(input => {
-            input.oninput = (e) => { const idx = e.target.dataset.index; state.npcs[idx].traumaDescription = e.target.value; save(); };
-        });
-    }
-    if (state.activeTab === 'calendar') {
-        document.getElementById('ov-calendar-season-select').onchange = (e) => { state.calendar.season = e.target.value; save(); updateUI(); };
-        document.getElementById('ov-cal-prev').onclick = () => changeCalendarMonth(-1);
-        document.getElementById('ov-cal-next').onclick = () => changeCalendarMonth(1);
-    }
-    if (state.activeTab === 'settings') {
-        document.getElementById('ov-opt-enabled').onchange = (e) => { state.enabled = e.target.checked; save(); };
-        document.getElementById('ov-opt-auto').onchange = (e) => { state.autoDetect = e.target.checked; save(); };
-        document.getElementById('ov-opt-interval').onchange = (e) => { state.promptInterval = parseInt(e.target.value) || 10; save(); };
-        document.getElementById('ov-btn-reset').onclick = () => { if(confirm("Очистить все данные расширения?")) { localStorage.removeItem('ov_dynamics_monolith_state'); location.reload(); } };
-    }
-}
+    $(document).on('change', '#ov-cfg-weight', function() {
+        state.promptWeight = $(this).val();
+        save();
+        updateUI();
+    });
 
-// ============================================================
-// 6. РЕГИСТРАЦИЯ РАСШИРЕНИЯ В SILLYTAVERN
-// ============================================================
-registerExtension("Omegaverse-Dynamics", {
-    onLoad: () => {
-        load();
+    $(document).on('change', '#ov-cfg-floating', function() {
+        state.showFloating = $(this).is(':checked');
+        save();
+        applyFloatVisibility();
+    });
 
-        // 1. Создаём плавающую кнопку на чистом JS (без jQuery зависимостей)
-        const btn = document.createElement('div');
-        btn.id = 'ov-mini-btn';
-        btn.innerHTML = '☯️';
-        btn.title = "Открыть Omegaverse Dynamics";
-        document.body.appendChild(btn);
+    // Обработчики настроек детекции
+    $(document).on('change', '#ov-det-npc', function() { state.autoDetect.detectNewNpc = $(this).is(':checked'); save(); });
+    $(document).on('change', '#ov-det-status', function() { state.autoDetect.detectStatus = $(this).is(':checked'); save(); });
+    $(document).on('change', '#ov-det-cycle', function() { state.autoDetect.detectCycle = $(this).is(':checked'); save(); });
+    $(document).on('change', '#ov-det-scent', function() { state.autoDetect.detectScent = $(this).is(':checked'); save(); });
+    $(document).on('change', '#ov-det-mark', function() { state.autoDetect.detectMark = $(this).is(':checked'); save(); });
+    $(document).on('change', '#ov-det-bond', function() { state.autoDetect.detectBond = $(this).is(':checked'); save(); });
 
-        // 2. Создаём главное всплывающее окно
-        const panel = document.createElement('div');
-        panel.id = 'ov-main-panel';
-        panel.style.display = 'none'; // По умолчанию скрыто
-        panel.innerHTML = `
-            <div class="ov-header">
-                <h3>🌙 OMEGA DYNAMICS</h3>
-                <button id="ov-close" style="background:transparent; border:none; color:white; font-size:22px; cursor:pointer; line-height:1;">&times;</button>
-            </div>
-            <div class="ov-tabs">
-                <button class="ov-tab-btn" id="ov-tab-player">👤 Я</button>
-                <button class="ov-tab-btn" id="ov-tab-npcs">👥 NPC</button>
-                <button class="ov-tab-btn" id="ov-tab-calendar">📅 Циклы</button>
-                <button class="ov-tab-btn" id="ov-tab-facts">🧠 Память</button>
-                <button class="ov-tab-btn" id="ov-tab-settings">⚙️ Опции</button>
-            </div>
-            <div class="ov-content"></div>
-        `;
-        document.body.appendChild(panel);
+    // Экспорт / Импорт настроек
+    $(document).on('click', '#ov-export-btn', () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "omegaverse_dynamics_state.json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+    });
 
-        // 3. Логика переключения менюшек по клику
-        btn.onclick = () => {
-            if (panel.style.display === 'none') {
-                panel.style.display = 'flex';
-                updateUI();
-            } else {
-                panel.style.display = 'none';
-            }
-        };
-
-        panel.querySelector('#ov-close').onclick = () => {
-            panel.style.display = 'none';
-        };
-
-        // Назначаем вкладки кликабельными
-        ['player', 'npcs', 'calendar', 'facts', 'settings'].forEach(tabName => {
-            panel.querySelector(`#ov-tab-${tabName}`).onclick = () => {
-                state.activeTab = tabName;
-                save();
-                updateUI();
+    $(document).on('click', '#ov-import-btn', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = readerEvent => {
+                try {
+                    const content = JSON.parse(readerEvent.target.result);
+                    if (content.npcs) {
+                        state = Object.assign({}, state, content);
+                        save();
+                        renderAllPanels();
+                        updateUI();
+                        notify('Данные успешно импортированы', 'system', 'fa-solid fa-file-circle-check');
+                    }
+                } catch (err) {
+                    notify('Ошибка импорта файлов конфигурации', 'error', 'fa-solid fa-triangle-exclamation');
+                }
             };
-        });
+            reader.readAsText(file);
+        };
+        input.click();
+    });
+
+    function applyFloatVisibility() {
+        if (state.showFloating) {
+            $('#ov-mini-btn').show();
+        } else {
+            $('#ov-mini-btn').hide();
+        }
     }
+
+    renderAllPanels();
+    applyFloatVisibility();
+    updateUI();
+    applyOmegaversePrompt();
+
+    // ---- ПАРСИНГ СООБЩЕНИЙ С СЕРВЕРА ----
+    eventSource.on(event_types.MESSAGE_RECEIVED, (messageId) => {
+        const context = SillyTavern.getContext();
+        const chat = context.chat;
+        if (!chat || !chat.length) return;
+        const msg = chat[chat.length - 1];
+        if (!msg) return;
+        // Автоматически сканируем только сообщения персонажей (ботов)
+        if (!msg.is_user) {
+            parseMessageForOmegaverse(msg.mes, 'bot');
+        }
+    });
+
+    eventSource.on(event_types.MESSAGE_UPDATED, () => {
+        applyOmegaversePrompt();
+    });
+
+    eventSource.on(event_types.MESSAGE_SENT, () => {
+        state.currentMessageCount++;
+        if (state.currentMessageCount % state.promptInterval === 0) {
+            applyOmegaversePrompt();
+        }
+    });
+
+    console.log('[OV Dynamics] Плагин динамики вторичных полов успешно запущен!');
 });
