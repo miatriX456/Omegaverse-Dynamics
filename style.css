@@ -1,0 +1,355 @@
+/* ============================================================
+   O M E G A V E R S E   D Y N A M I C S
+   Premium Visual Novel UI & Seasonal Customization
+   ============================================================ */
+
+/* ----- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И ЦВЕТА ----- */
+:root {
+    --ov-alpha: #ff4757;
+    --ov-alpha-glow: rgba(255, 71, 87, 0.4);
+    --ov-omega: #2ed573;
+    --ov-omega-glow: rgba(46, 213, 115, 0.4);
+    --ov-beta: #747d8c;
+    --ov-beta-glow: rgba(116, 125, 140, 0.25);
+    
+    /* Стеклянная темная тема BB VNE */
+    --ov-bg: rgba(11, 15, 26, 0.88);
+    --ov-card-bg: rgba(20, 27, 45, 0.65);
+    --ov-border: rgba(255, 255, 255, 0.08);
+    --ov-text: #f1f2f6;
+    --ov-text-muted: #a4b0be;
+    --ov-radius: 20px;
+    --ov-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255,255,255,0.1);
+}
+
+/* ----- ПЛАВАЮЩАЯ КНОПКА (Стеклянный Артефакт) ----- */
+#ov-mini-btn {
+    position: fixed;
+    bottom: 85px;
+    right: 25px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0.05)) !important;
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    border-radius: 50% !important;
+    box-shadow: var(--ov-shadow), 0 0 15px rgba(255,255,255,0.1) !important;
+    color: #ffffff !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    z-index: 9999;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+#ov-mini-btn:hover {
+    transform: scale(1.1) rotate(15deg);
+    border-color: rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 0 25px rgba(255,255,255,0.25), var(--ov-shadow) !important;
+}
+.ov-badge-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: linear-gradient(135deg, #ff4757, #ff6b81);
+    color: white;
+    border-radius: 12px;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 800;
+    box-shadow: 0 4px 10px rgba(255,71,87,0.4);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* ----- ОСНОВНОЕ ОКНО ОКНА ----- */
+#ov-main-panel {
+    position: fixed;
+    bottom: 160px;
+    right: 25px;
+    width: 440px;
+    max-height: 70vh;
+    background: var(--ov-bg);
+    backdrop-filter: blur(25px) saturate(170%);
+    -webkit-backdrop-filter: blur(25px) saturate(170%);
+    border: 1px solid var(--ov-border);
+    border-radius: var(--ov-radius);
+    box-shadow: var(--ov-shadow);
+    color: var(--ov-text);
+    z-index: 9998;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Хедер панели */
+.ov-header {
+    padding: 18px 22px;
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--ov-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.ov-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #fff, var(--ov-text-muted));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Переключатели вкладок */
+.ov-tabs {
+    display: flex;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 4px;
+    gap: 4px;
+    border-bottom: 1px solid var(--ov-border);
+}
+.ov-tab-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--ov-text-muted);
+    padding: 10px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+.ov-tab-btn:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.03);
+}
+.ov-tab-btn.active {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+/* Контентная зона */
+.ov-content {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* ----- КРАСИВЫЙ КАЛЕНДАРЬ И ВРЕМЕНА ГОДА ----- */
+.ov-calendar-beautiful {
+    position: relative;
+    border-radius: 20px;
+    padding: 20px;
+    margin-top: 15px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+    transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Декоративный фоновый узор */
+.ov-calendar-beautiful::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%; width: 200%; height: 200%;
+    background-image: radial-gradient(rgba(255,255,255,0.15) 1.5px, transparent 1.5px);
+    background-size: 16px 16px;
+    opacity: 0.4;
+    transform: rotate(10deg);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Летающие лепестки/листья/снежинки */
+.ov-season-decor {
+    position: absolute;
+    top: 12px;
+    right: 18px;
+    font-size: 32px;
+    opacity: 0.9;
+    pointer-events: none;
+    z-index: 1;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+    animation: ovVisualFloat 5s ease-in-out infinite;
+}
+@keyframes ovVisualFloat {
+    0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+    50% { transform: translateY(-6px) scale(1.08) rotate(8deg); }
+}
+
+/* --- ЦВЕТОВЫЕ СХЕМЫ СЕЗОНОВ --- */
+/* ВЕСНА (Розовая нежная сакура) */
+.ov-season-spring {
+    background: linear-gradient(135deg, rgba(255, 167, 185, 0.85) 0%, rgba(255, 218, 224, 0.75) 100%);
+    color: #4a1521 !important;
+}
+.ov-season-spring .ov-cal-day { color: #5c1d2e; font-weight: 700; }
+.ov-season-spring span, .ov-season-spring .ov-calendar-grid div { color: #4a1521; }
+
+/* ЛЕТО (Сочная зелень и солнце) */
+.ov-season-summer {
+    background: linear-gradient(135deg, rgba(78, 205, 196, 0.85) 0%, rgba(247, 255, 234, 0.75) 100%);
+    color: #0b4f46 !important;
+}
+.ov-season-summer .ov-cal-day { color: #0b4f46; font-weight: 700; }
+.ov-season-summer span, .ov-season-summer .ov-calendar-grid div { color: #0b4f46; }
+
+/* ОСЕНЬ (Пряный имбирь и клен) */
+.ov-season-autumn {
+    background: linear-gradient(135deg, rgba(235, 94, 40, 0.8) 0%, rgba(255, 200, 100, 0.75) 100%);
+    color: #401700 !important;
+}
+.ov-season-autumn .ov-cal-day { color: #5c2200; font-weight: 700; }
+.ov-season-autumn span, .ov-season-autumn .ov-calendar-grid div { color: #401700; }
+
+/* ЗИМА (Хрустальный морозный синий) */
+.ov-season-winter {
+    background: linear-gradient(135deg, rgba(64, 115, 158, 0.85) 0%, rgba(220, 236, 251, 0.75) 100%);
+    color: #052642 !important;
+}
+.ov-season-winter .ov-cal-day { color: #08365e; font-weight: 700; }
+.ov-season-winter span, .ov-season-winter .ov-calendar-grid div { color: #052642; }
+
+/* Клетки календаря внутри сезонов */
+.ov-calendar-beautiful .ov-cal-day {
+    background: rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 12px;
+    padding: 8px 0;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+.ov-calendar-beautiful .ov-cal-day:hover {
+    background: rgba(255, 255, 255, 0.65);
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+
+/* Подсветка событий в календаре */
+.ov-cal-day.event-heat {
+    background: rgba(255, 71, 87, 0.75) !important;
+    color: #fff !important;
+    border-color: #ff4757 !important;
+}
+.ov-cal-day.event-rut {
+    background: rgba(30, 144, 255, 0.75) !important;
+    color: #fff !important;
+    border-color: #1e90ff !important;
+}
+.ov-cal-day.event-mark {
+    background: rgba(ffa502, 0.8) !important;
+    color: #2f3542 !important;
+    border-color: #ffa502 !important;
+}
+.ov-cal-day.cal-today {
+    background: rgba(255, 255, 255, 0.9) !important;
+    border: 2px solid #fff !important;
+    box-shadow: 0 0 15px rgba(255,255,255,0.6);
+    transform: scale(1.08);
+}
+
+/* ----- ФОРМЫ, КАРТОЧКИ И ИНТЕРФЕЙС ----- */
+.ov-section-title {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 15px 0 10px 0;
+    color: var(--ov-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ov-card {
+    background: var(--ov-card-bg);
+    border: 1px solid var(--ov-border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+.ov-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    gap: 10px;
+}
+.ov-row:last-child { margin-bottom: 0; }
+
+/* Селекты и Инпуты */
+.ov-select, .ov-input {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid var(--ov-border) !important;
+    color: var(--ov-text) !important;
+    border-radius: 10px !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    outline: none !important;
+    transition: all 0.2s ease;
+}
+.ov-select:focus, .ov-input:focus {
+    border-color: rgba(255,255,255,0.25) !important;
+    background: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Кнопки */
+.ov-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255,255,255,0.05);
+    color: var(--ov-text);
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.ov-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255,255,255,0.15);
+}
+.ov-btn-primary {
+    background: linear-gradient(135deg, #57606f, #2f3542);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.ov-btn-primary:hover {
+    background: linear-gradient(135deg, #747d8c, #4f5d73);
+}
+
+/* Статусные бейджи */
+.ov-status-badge {
+    padding: 3px 9px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+.ov-status-alpha { background: var(--ov-alpha-glow); color: #ff6b81; border: 1px solid var(--ov-alpha); }
+.ov-status-omega { background: var(--ov-omega-glow); color: #2ed573; border: 1px solid var(--ov-omega); }
+.ov-status-beta { background: var(--ov-beta-glow); color: #ced6e0; border: 1px solid var(--ov-beta); }
+
+/* Анимация пульсации при обновлении NPC (зеленая звездочка) */
+.ov-npc-updated {
+    animation: ovUpdatedPulse 0.8s ease 3;
+}
+@keyframes ovUpdatedPulse {
+    0%, 100% { border-color: var(--ov-border); }
+    50% { border-color: #2ed573; box-shadow: 0 0 15px rgba(46,213,115,0.25); }
+}
+
+/* Кастомный красивый скроллбар */
+.ov-content::-webkit-scrollbar { width: 6px; }
+.ov-content::-webkit-scrollbar-track { background: transparent; }
+.ov-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+.ov-content::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+.ov-text-muted { color: var(--ov-text-muted); font-size: 12px; }
+.ov-flex { flex: 1; }
